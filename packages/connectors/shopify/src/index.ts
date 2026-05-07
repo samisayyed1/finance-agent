@@ -5,6 +5,7 @@ import {
   type ShopifyWebhookTopic,
 } from "./canonical/types";
 import { type ParseContext, parseEvent } from "./parse";
+import { verifyShopifyWebhook } from "./webhook/verify";
 
 export {
   type BackfillCallEnv,
@@ -34,6 +35,7 @@ export {
 } from "./oauth/encryption";
 export { buildState, verifyState } from "./oauth/state";
 export { type ParseContext, parseEvent } from "./parse";
+export { parseJsonBigintSafe } from "./parse/json-bigint";
 export {
   decimalStringToMinor,
   minorToDecimalString,
@@ -83,21 +85,18 @@ export const shopifyConnector: Connector<ShopifyRawEvent, NormalizedEvent> = {
       "Connector.backfill — call `backfillOrders({ shop, accessToken, since })` directly"
     );
   },
-  verifyWebhook: ({ headers, rawBody }) => {
+  verifyWebhook: async ({ headers, rawBody }) => {
     const hmac =
       headers["x-shopify-hmac-sha256"] ?? headers["X-Shopify-Hmac-Sha256"];
     const secret = process.env.SHOPIFY_API_SECRET;
     if (!secret) {
       throw new Error("SHOPIFY_API_SECRET not set");
     }
-    // Connector.verifyWebhook is sync per the shared interface; the real
-    // WebCrypto path is async, so callers must use the async
-    // `verifyShopifyWebhook` export directly (which the Day-1 webhook
-    // handler does). This sync stub is unreachable in practice.
-    if (hmac && rawBody) {
-      return false;
-    }
-    return false;
+    return await verifyShopifyWebhook({
+      rawBody,
+      hmacHeader: hmac ?? null,
+      secret,
+    });
   },
   parseEvent: (raw) => {
     if (raw.topic === "app/uninstalled" || !SHOPIFY_TOPIC_SET.has(raw.topic)) {

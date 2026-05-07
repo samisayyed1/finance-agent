@@ -10,28 +10,16 @@ export const FLAG_KINDS = [
 
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
-export interface ReconciliationFlag {
-  actual: number;
-  delta: number;
-  expected: number;
-  flag_id: string;
-  kind: FlagKind;
-  order_id?: string;
-  org_id: string;
-  payment_id?: string;
-  status: "open" | "resolved" | "dismissed";
-}
-
-export interface ReconciliationWindow {
-  from: Date;
-  to: Date;
-}
-
-export const runReconciliation = (
-  _orgId: string,
-  _window: ReconciliationWindow
-): Promise<ReconciliationFlag[]> => {
-  throw new Error(
-    "@ai-cfo/reconcile: runReconciliation not implemented (Day-0)"
-  );
-};
+export {
+  type Match,
+  type MatchOptions,
+  type MatchOrder,
+  type MatchPayment,
+  type MatchResult,
+  matchOrdersToPayments,
+} from "./match";
+export {
+  type ReconcileResult,
+  type ReconcileWindow,
+  runReconciliation,
+} from "./run-reconciliation";

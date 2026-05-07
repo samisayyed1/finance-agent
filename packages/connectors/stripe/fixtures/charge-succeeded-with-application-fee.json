@@ -1,0 +1,31 @@
+{
+  "id": "evt_test_charge_appfee_1",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "type": "charge.succeeded",
+  "livemode": false,
+  "created": 1746547200,
+  "account": "acct_1MzFixtureConnect",
+  "data": {
+    "object": {
+      "id": "ch_test_appfee_1",
+      "object": "charge",
+      "amount": 10000,
+      "amount_refunded": 0,
+      "currency": "usd",
+      "status": "succeeded",
+      "paid": true,
+      "captured": true,
+      "created": 1746547200,
+      "application_fee_amount": 200,
+      "balance_transaction": {
+        "id": "txn_test_appfee",
+        "object": "balance_transaction",
+        "fee": 350,
+        "net": 9650
+      },
+      "metadata": {},
+      "refunds": { "data": [] }
+    }
+  }
+}

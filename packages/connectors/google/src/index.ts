@@ -37,7 +37,7 @@ export const googleConnector: Connector<GoogleRawEvent, GoogleNormalized> = {
   async *backfill() {
     notImplemented("backfill");
   },
-  verifyWebhook: () => true,
+  verifyWebhook: () => Promise.resolve(true),
   parseEvent: () => notImplemented("parseEvent"),
   reconcile: (): Promise<ReconciliationDelta> => notImplemented("reconcile"),
 };

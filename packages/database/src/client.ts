@@ -13,6 +13,7 @@ import {
 } from "./schema/orders";
 import { organizations } from "./schema/organizations";
 import { pages } from "./schema/pages";
+import { reconciliationFlags } from "./schema/reconciliation";
 
 export const schema = {
   pages,
@@ -26,6 +27,7 @@ export const schema = {
   payments,
   refunds,
   payouts,
+  reconciliationFlags,
 };
 
 const globalForDb = global as unknown as {

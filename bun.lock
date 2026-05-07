@@ -21,6 +21,7 @@
         "@ai-cfo/analytics": "workspace:*",
         "@ai-cfo/auth": "workspace:*",
         "@ai-cfo/connector-shopify": "workspace:*",
+        "@ai-cfo/connector-stripe": "workspace:*",
         "@ai-cfo/database": "workspace:*",
         "@ai-cfo/design-system": "workspace:*",
         "@ai-cfo/next-config": "workspace:*",
@@ -31,6 +32,7 @@
         "@t3-oss/env-nextjs": "^0.13.10",
         "@trigger.dev/sdk": "4.4.5",
         "import-in-the-middle": "^3.0.0",
+        "lossless-json": "4.3.0",
         "next": "16.1.6",
         "pino": "10.3.1",
         "react": "19.2.4",
@@ -63,6 +65,7 @@
         "@ai-cfo/observability": "workspace:*",
         "@ai-cfo/security": "workspace:*",
         "@ai-cfo/seo": "workspace:*",
+        "@ai-cfo/shared": "workspace:*",
         "@ai-cfo/webhooks": "workspace:*",
         "@sentry/nextjs": "^10.42.0",
         "@t3-oss/env-nextjs": "^0.13.10",
@@ -342,6 +345,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ai-cfo/shared": "workspace:*",
+        "lossless-json": "4.3.0",
         "zod": "4.3.6",
       },
       "devDependencies": {
@@ -537,8 +541,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@ai-cfo/connector-shopify": "workspace:*",
+        "@ai-cfo/connector-stripe": "workspace:*",
         "@ai-cfo/database": "workspace:*",
         "@ai-cfo/metrics": "workspace:*",
+        "@ai-cfo/reconcile": "workspace:*",
         "@aws-sdk/client-s3": "3.1044.0",
         "@trigger.dev/sdk": "4.4.5",
         "pino": "10.3.1",
@@ -3463,6 +3469,8 @@
     "long": ["long@4.0.0", "", {}, "sha512-XsP+KhQif4bjX1kbuSiySJFNAehNxgLb6hPRGJ9QsUr8ajHkuXGdrHmFUTUUXhDwVX2R5bY4JNZEwbUiMhV+MA=="],
 
     "longest-streak": ["longest-streak@3.1.0", "", {}, "sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g=="],
+
+    "lossless-json": ["lossless-json@4.3.0", "", {}, "sha512-ToxOC+SsduRmdSuoLZLYAr5zy1Qu7l5XhmPWM3zefCZ5IcrzW/h108qbJUKfOlDlhvhjUK84+8PSVX0kxnit0g=="],
 
     "lower-case": ["lower-case@1.1.4", "", {}, "sha512-2Fgx1Ycm599x+WGpIYwJOvsjmXFzTSc34IwDWALRA/8AopUKAVPwfJ+h5+f85BCp0PWmmJcWzEpxOpoXycMpdA=="],
 

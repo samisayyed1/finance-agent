@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-cfo/shared": "workspace:*",
+    "lossless-json": "4.3.0",
     "zod": "4.3.6"
   },
   "devDependencies": {

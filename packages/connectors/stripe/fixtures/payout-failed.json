@@ -1,0 +1,22 @@
+{
+  "id": "evt_test_payout_failed_1",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "type": "payout.failed",
+  "livemode": false,
+  "created": 1747065600,
+  "account": "acct_1MzFixtureConnect",
+  "data": {
+    "object": {
+      "id": "po_test_payout_2",
+      "object": "payout",
+      "amount": 50000,
+      "currency": "usd",
+      "status": "failed",
+      "arrival_date": null,
+      "created": 1747065600,
+      "failure_message": "Insufficient funds in the bank account.",
+      "metadata": {}
+    }
+  }
+}

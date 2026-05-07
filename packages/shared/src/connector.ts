@@ -39,10 +39,15 @@ export interface Connector<RawEvent, Normalized> {
     | "netsuite"
     | "plaid";
 
+  /**
+   * Verify a webhook's authenticity. Async because the WebCrypto-based
+   * implementations (Shopify HMAC, Stripe signature) are async, and edge
+   * runtimes don't expose sync crypto.
+   */
   verifyWebhook(args: {
     headers: Record<string, string>;
-    rawBody: string;
-  }): boolean;
+    rawBody: string | Uint8Array;
+  }): Promise<boolean>;
 
   readonly webhookTopics: readonly string[];
 }

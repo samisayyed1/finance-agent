@@ -14,16 +14,21 @@ import {
   gte,
   lt,
   orders,
+  payments,
   refunds,
 } from "@ai-cfo/database";
 import {
-  computeShopifyDailyMetricsFromRows,
-  type ShopifyDailyMetricsOutput,
+  computeDailyMetricsFromRows,
+  type DailyMetricsOutput,
 } from "./compute-daily-metrics";
 
 export {
+  computeDailyMetricsFromRows,
   computeShopifyDailyMetricsFromRows,
+  type DailyMetricsInput,
+  type DailyMetricsOutput,
   type OrderRow,
+  type PaymentRow,
   type RefundRow,
   type ShopifyDailyMetricsInput,
   type ShopifyDailyMetricsOutput,
@@ -48,13 +53,11 @@ const startOfNextUtcDay = (d: Date): Date => {
 export interface ComputeArgs {
   date: Date;
   orgId: string;
-  /** Restrict computation to a single source. Day-1 only 'shopify' is supported. */
-  source?: "shopify";
 }
 
 export const computeDailyMetrics = async (
   args: ComputeArgs
-): Promise<ShopifyDailyMetricsOutput> => {
+): Promise<DailyMetricsOutput> => {
   const dayStart = startOfUtcDay(args.date);
   const dayEnd = startOfNextUtcDay(args.date);
 
@@ -87,17 +90,35 @@ export const computeDailyMetrics = async (
     .where(
       and(
         eq(refunds.orgId, args.orgId),
-        eq(refunds.source, "shopify"),
         gte(refunds.processedAt, dayStart),
         lt(refunds.processedAt, dayEnd)
       )
     );
 
-  const result = computeShopifyDailyMetricsFromRows({
+  const paymentsForDate = await database
+    .select({
+      source: payments.source,
+      status: payments.status,
+      currency: payments.currency,
+      feeAmount: payments.feeAmount,
+      processedAt: payments.processedAt,
+    })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orgId, args.orgId),
+        eq(payments.source, "stripe"),
+        gte(payments.processedAt, dayStart),
+        lt(payments.processedAt, dayEnd)
+      )
+    );
+
+  const result = computeDailyMetricsFromRows({
     orgId: args.orgId,
     date: args.date,
     ordersForDate,
     refundsForDate,
+    paymentsForDate,
   });
 
   await database
@@ -128,6 +149,8 @@ export const computeDailyMetrics = async (
         revenueGross: result.revenue_gross,
         revenueNet: result.revenue_net,
         refunds: result.refunds,
+        fees: result.fees,
+        contributionProfit: result.contribution_profit,
         aov: result.aov,
         orders: result.orders,
         computedAt: new Date(),

@@ -91,11 +91,16 @@ describe("computeShopifyDailyMetricsFromRows: 12 orders, 3 refunds", () => {
     expect(result.snapshot_id.startsWith(`${ORG}-2026-05-07-`)).toBe(true);
   });
 
-  it("explicitly nulls fields pending other connectors", () => {
-    expect(result.fees).toBeNull();
+  it("with no Stripe payments today, fees = $0.00 and revenue_net = revenue_gross − refunds", () => {
+    // Day-1 shape: a Shopify-only day. fees = 0 (no Stripe rows). The
+    // revenue_net assertion above already checks the math.
+    expect(result.fees).toBe("0.00");
+    expect(result.contribution_profit).toBe(result.revenue_net);
+  });
+
+  it("explicitly nulls fields still pending other connectors (Day-2 surface)", () => {
     expect(result.ad_spend).toBeNull();
     expect(result.gross_margin).toBeNull();
-    expect(result.contribution_profit).toBeNull();
     expect(result.roas).toBeNull();
     expect(result.blended_mer).toBeNull();
     expect(result.cac).toBeNull();

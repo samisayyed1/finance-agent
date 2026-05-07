@@ -1,0 +1,20 @@
+{
+  "id": "evt_test_dispute_1",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "type": "charge.dispute.created",
+  "livemode": false,
+  "created": 1746720000,
+  "account": "acct_1MzFixtureConnect",
+  "data": {
+    "object": {
+      "id": "dp_test_dispute_1",
+      "object": "dispute",
+      "amount": 21592,
+      "currency": "usd",
+      "charge": "ch_test_succeeded_1",
+      "status": "warning_needs_response",
+      "created": 1746720000
+    }
+  }
+}

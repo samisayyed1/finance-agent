@@ -1,0 +1,45 @@
+{
+  "id": "evt_test_charge_refunded_1",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "type": "charge.refunded",
+  "livemode": false,
+  "created": 1746633600,
+  "account": "acct_1MzFixtureConnect",
+  "data": {
+    "object": {
+      "id": "ch_test_succeeded_1",
+      "object": "charge",
+      "amount": 21592,
+      "amount_refunded": 5425,
+      "currency": "usd",
+      "status": "succeeded",
+      "paid": true,
+      "captured": true,
+      "created": 1746547200,
+      "balance_transaction": {
+        "id": "txn_test_1",
+        "object": "balance_transaction",
+        "fee": 656,
+        "net": 20936
+      },
+      "metadata": {
+        "shopify_order_id": "820982911946154508"
+      },
+      "refunds": {
+        "data": [
+          {
+            "id": "re_test_refund_1",
+            "object": "refund",
+            "amount": 5425,
+            "currency": "usd",
+            "charge": "ch_test_succeeded_1",
+            "reason": "requested_by_customer",
+            "status": "succeeded",
+            "created": 1746633600
+          }
+        ]
+      }
+    }
+  }
+}

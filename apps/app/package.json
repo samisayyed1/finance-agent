@@ -15,6 +15,7 @@
     "@ai-cfo/auth": "workspace:*",
     "@ai-cfo/collaboration": "workspace:*",
     "@ai-cfo/database": "workspace:*",
+    "@ai-cfo/shared": "workspace:*",
     "@ai-cfo/design-system": "workspace:*",
     "@ai-cfo/feature-flags": "workspace:*",
     "@ai-cfo/next-config": "workspace:*",

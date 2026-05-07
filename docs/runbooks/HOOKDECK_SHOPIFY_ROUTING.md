@@ -40,3 +40,14 @@ For local development without Hookdeck, point your Partner Dashboard's webhook e
 - Hookdeck → Connection → Events tab shows individual delivery attempts + responses.
 - If our `apps/api` goes down for an extended period, Hookdeck will keep retrying for up to 24h. Recover within the window and events drain automatically.
 - If recovery exceeds 24h: events fail permanently in Hookdeck; recovery path is the daily reconciliation job which re-walks the Shopify Admin API for the missing window (Day-2 work).
+
+## Stripe routing (Day-2)
+
+Same pattern. Per env:
+
+1. Hookdeck → **Sources → New → Stripe managed**.
+2. Hookdeck issues a public URL — paste into Stripe Dashboard's **Developers → Webhooks → Endpoint URL** for the connected-account events listener.
+3. Hookdeck destination → `https://api.<env>.aicfo.example/webhooks/stripe`.
+4. Same retry policy + dedup window. Dedup key: `Stripe-Signature` header's `t=` segment is per-request, so we dedup on Stripe's `event.id` after our handler sees it (the unique constraint on `raw_payloads(org_id, source, event_id)` makes this safe even without Hookdeck-level dedup).
+
+If you skip Hookdeck for Stripe (acceptable in dev), point the Stripe webhook directly at `apps/api /webhooks/stripe`.

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseEvent } from "../src/parse";
+import { parseJsonBigintSafe } from "../src/parse/json-bigint";
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -143,6 +144,54 @@ describe("parseEvent: app/uninstalled", () => {
       topic: "app/uninstalled",
     });
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("bigint-safe JSON parse (Day-2 TODO #1)", () => {
+  it("preserves a 19-digit order id (>2^53) verbatim through parse + canonical mapping", () => {
+    // 9999999999999999999 > Number.MAX_SAFE_INTEGER (9007199254740991).
+    // JSON.parse() would round this to 10000000000000000000.
+    const rawJson = `{
+      "id": 9999999999999999999,
+      "order_number": 1,
+      "currency": "USD",
+      "subtotal_price": "10.00",
+      "total_tax": "0.00",
+      "total_discounts": "0.00",
+      "total_price": "10.00",
+      "financial_status": "paid",
+      "created_at": "2026-05-07T10:00:00Z",
+      "line_items": [
+        {
+          "id": 8888888888888888888,
+          "quantity": 1,
+          "price": "10.00"
+        }
+      ]
+    }`;
+    const parsed = parseJsonBigintSafe(rawJson) as Record<string, unknown>;
+    // The big ids should arrive as strings, NOT as a rounded number.
+    expect(parsed.id).toBe("9999999999999999999");
+
+    const events = parseEvent({
+      orgId: ORG_ID,
+      rawPayload: parsed,
+      topic: "orders/create",
+    });
+    const order = events[0];
+    if (order?.kind !== "order") {
+      throw new Error("expected order");
+    }
+    expect(order.sourceOrderId).toBe("9999999999999999999");
+    expect(order.lineItems[0]?.sourceLineItemId).toBe("8888888888888888888");
+  });
+
+  it("keeps small numeric values as numbers (quantities, scale-2 money strings already)", () => {
+    const rawJson = '{"id":42,"qty":3,"price":"19.99"}';
+    const parsed = parseJsonBigintSafe(rawJson) as Record<string, unknown>;
+    expect(parsed.id).toBe(42);
+    expect(parsed.qty).toBe(3);
+    expect(parsed.price).toBe("19.99");
   });
 });
 

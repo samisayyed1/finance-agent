@@ -1,0 +1,21 @@
+{
+  "id": "evt_test_payout_created_1",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "type": "payout.created",
+  "livemode": false,
+  "created": 1746806400,
+  "account": "acct_1MzFixtureConnect",
+  "data": {
+    "object": {
+      "id": "po_test_payout_1",
+      "object": "payout",
+      "amount": 209360,
+      "currency": "usd",
+      "status": "pending",
+      "arrival_date": 1746979200,
+      "created": 1746806400,
+      "metadata": {}
+    }
+  }
+}

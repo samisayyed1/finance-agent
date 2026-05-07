@@ -1,3 +1,4 @@
+import { parseJsonBigintSafe } from "@ai-cfo/connector-shopify";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 let cached: S3Client | null = null;
@@ -32,5 +33,7 @@ export const fetchRawPayload = async (r2Key: string): Promise<unknown> => {
     throw new Error(`empty body at ${r2Key}`);
   }
   const text = await out.Body.transformToString("utf-8");
-  return JSON.parse(text);
+  // Bigint-safe: Shopify webhook ids exceed Number.MAX_SAFE_INTEGER and
+  // JSON.parse silently rounds them. lossless-json keeps precision.
+  return parseJsonBigintSafe(text);
 };
