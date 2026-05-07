@@ -20,4 +20,7 @@ const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port });
 logger.info({ port }, "ai-cfo-mcp listening");
 
-export default app;
+// NOTE: do NOT add `export default app;` — Bun auto-serves any default-
+// exported Hono-shaped object on `process.env.PORT`, conflicting with the
+// explicit @hono/node-server listen above (EADDRINUSE). The bare `serve()`
+// call is the authoritative listener.

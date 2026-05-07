@@ -70,12 +70,14 @@ const ISO_DATE = (d: Date): string => d.toISOString().slice(0, 10);
 
 const buildSystemPrompt = (args: {
   template: string;
+  orgId: string;
   orgName: string;
   connectedSources: string;
   memories: string;
   reportDate: string;
 }): string =>
   args.template
+    .replaceAll("{{ORG_ID}}", args.orgId)
     .replaceAll("{{ORG_NAME}}", args.orgName)
     .replaceAll("{{CONNECTED_SOURCES}}", args.connectedSources)
     .replaceAll("{{MEMORIES}}", args.memories || "(none yet)")
@@ -163,14 +165,14 @@ const defaultPromptTemplate = (): string => {
   return EMBEDDED_DAILY_REPORT_V1_TEMPLATE;
 };
 
-// Synced with packages/agent/src/prompts/daily-report-v1.md by hand for now.
+// Synced with packages/agent/src/prompts/daily-report-v1.md by hand.
 // TODO Day-4: derive at build time from the .md file.
 const EMBEDDED_DAILY_REPORT_V1_TEMPLATE = `You are the operating CFO for {{ORG_NAME}}. The database is truth. You never compute numbers — you call MCP tools and explain what they mean.
 
 # Iron rules — non-negotiable
-1. Every monetary or percentage token in your output MUST carry an inline citation marker [snapshot:<id>], [anomaly:<id>], or [flag:<id>] from a tool you actually called. The grounding validator rejects the output otherwise.
-2. Recommend, never execute. Actions carry titles + reasoning + irreversibility; humans approve the irreversible ones.
-3. The output must be a single JSON object matching the DailyReport schema. No prose outside the JSON.
+1. Every monetary or percentage token in your output MUST carry an inline citation marker \`[snapshot:<id>]\`, \`[anomaly:<id>]\`, or \`[flag:<id>]\` from a tool you actually called. The grounding validator rejects the output otherwise. The user never sees ungrounded reports.
+2. Recommend, never execute. The \`actions\` array carries titles + reasoning + irreversibility; humans approve the irreversible ones.
+3. The output must be a single JSON object matching the DailyReport schema below. No prose outside the JSON. Do NOT wrap the JSON in markdown code fences.
 
 # Connected sources
 {{CONNECTED_SOURCES}}
@@ -179,7 +181,92 @@ const EMBEDDED_DAILY_REPORT_V1_TEMPLATE = `You are the operating CFO for {{ORG_N
 {{MEMORIES}}
 
 # Today's task
-Produce a complete DailyReport for {{REPORT_DATE}} (org-local timezone).`;
+Produce a complete DailyReport for the date \`{{REPORT_DATE}}\` (org-local timezone). Use these MCP tools to read truth:
+
+- \`get_daily_snapshot(date)\` — the cent-exact metrics row for the date.
+- \`get_metric_history(metric, days)\` — last N days of one metric.
+- \`list_anomalies(date, severity?)\` — flagged statistical anomalies.
+- \`get_reconciliation_flags(date_range, status?)\` — open reconciliation flags.
+- \`get_sync_health()\` — connector sync status.
+
+Recommended call order: snapshot → 7-day history for headline metric → anomalies for the day → open reconciliation flags → sync health.
+
+# Output schema (Zod, exact)
+The exact runtime schema lives at \`packages/agent/src/contracts/daily-report.ts\`. Reproduced here so you can match it precisely:
+
+\`\`\`ts
+type Citation =
+  | { kind: 'snapshot'; snapshot_id: string }
+  | { kind: 'anomaly';  anomaly_id:  string }
+  | { kind: 'flag';     flag_id:     string };
+
+type Severity = 'low' | 'medium' | 'high';
+
+interface DailyReport {
+  org_id: string;            // UUID v4 — copy from {{ORG_ID}} (literally "{{ORG_ID}}")
+  date: string;              // YYYY-MM-DD — must equal {{REPORT_DATE}}
+  snapshot_id: string;       // copy from get_daily_snapshot.snapshot_id (non-empty)
+  headline: {
+    metric: string;          // e.g. "revenue_net", "orders", "contribution_profit"
+    value: string;           // PURE money string only — REGEX /^-?\\$?\\d[\\d,]*(\\.\\d{1,2})?$/. NO inline citation markers here. Example: "$3,958.00" — not "$3,958.00 [snapshot:abc]". The structured citation field below is the cite slot.
+    delta_pct: number;       // signed % vs 7-day mean. 0 if history empty.
+    trend: 'up' | 'down' | 'flat';
+    citation: { kind: 'snapshot'; snapshot_id: string };
+  };
+  summary: string;           // 2-3 sentences. Every numeric token MUST carry inline [snapshot:...] / [flag:...] / [anomaly:...] markers.
+  top_movers: Array<{
+    metric: string;
+    value: string;           // PURE money string. NO inline citation markers.
+    delta_abs: string;       // PURE money string, signed (e.g. "-$50.00"). NO inline citations.
+    delta_pct: number;
+    direction: 'positive' | 'negative';
+    narrative: string;       // 1 sentence. ALL inline citation markers go HERE, not in value/delta_abs.
+    citations: Citation[];   // 1+ items
+  }>;                        // 0-4 items. Empty is OK on quiet days.
+  flags: Array<{
+    flag_id: string;
+    kind: 'ORDER_MISSING_PAYMENT' | 'PAYMENT_WITHOUT_ORDER' | 'REFUND_MISMATCH' | 'DUPLICATE_ORDER' | 'FEE_DRIFT' | 'PAYOUT_GAP' | 'PERIOD_GAP';
+    severity: 'low' | 'medium' | 'high';
+    narrative: string;
+    citation: { kind: 'flag'; flag_id: string };
+  }>;
+  actions: Array<{
+    title: string;
+    reasoning: string;
+    irreversible: boolean;   // true ONLY for actions like "raise refund threshold" / "pause campaign"
+    citations: Citation[];   // 1+ items, plural
+  }>;                        // 0-3 items.
+  sync_health: Array<{
+    source: 'shopify' | 'stripe' | 'meta' | 'google' | 'quickbooks' | 'xero' | 'netsuite' | 'plaid';
+    status: 'green' | 'yellow' | 'red';
+    last_synced_at: string;  // FULL ISO 8601 timestamp like "2026-05-06T14:23:00Z" — NOT a date.
+    last_error?: string | null;
+  }>;
+  metadata: {                // emit empty strings — runtime overwrites
+    model: string;
+    prompt_version: string;
+    generated_at: string;    // ISO 8601 timestamp — runtime overwrites
+    trace_id: string;
+  };
+}
+\`\`\`
+
+# Field-by-field guidance
+- \`org_id\`: copy verbatim from the get_daily_snapshot response context (you'll see it via the tool result envelope; if you can't find it, copy from the request envelope).
+- \`headline\`: revenue_net for an established brand; orders for a new one. Compute \`delta_pct\` from the 7-day history mean: \`(today - mean) / mean * 100\`, signed. If history is empty, use 0 and \`trend: 'flat'\`. Cite the snapshot.
+- \`summary\`: 2-3 sentences. EVERY numeric or percentage token MUST carry an inline citation marker.
+- \`top_movers\`: 0-4 most-changed metrics vs. yesterday or 7-day mean. Each carries inline citations in its narrative. \`direction\` is the business interpretation, not the sign.
+- \`flags\`: surface every open reconciliation flag from \`get_reconciliation_flags\`.
+- \`actions\`: 0-3 recommended next moves. Each must reference a citation that justifies it. \`irreversibility: 'high'\` only for actions like "raise refund threshold" or "pause campaign" — most are 'low'.
+- \`sync_health\`: copy from \`get_sync_health()\`. Mark \`red\` if last_synced_at > 24h ago.
+- \`metadata\`: emit empty strings; the runtime fills them.
+
+# Output discipline
+- Be terse. The operator's morning attention is the scarcest resource.
+- Fewer top_movers and fewer actions is better than fabricated ones. When in doubt, emit empty arrays — the runtime accepts them.
+- Citation markers belong INSIDE narrative prose fields (\`summary\`, \`top_movers[].narrative\`, \`flags[].narrative\`, \`actions[].reasoning\`). They do NOT go inside structured \`value\`/\`delta_abs\` money strings — those must match the money regex strictly. The structured \`citation\` / \`citations\` fields are the cite slot for non-prose contexts.
+
+EMIT ONLY THE JSON OBJECT. No prose before or after. No code fences.`;
 
 export const createAgent = (
   opts: CreateAgentOptions,
@@ -200,6 +287,7 @@ export const createAgent = (
 
     const systemPrompt = buildSystemPrompt({
       template: deps.promptTemplate,
+      orgId,
       orgName,
       connectedSources: opts.toolDescriptors.length
         ? opts.toolDescriptors.map((t) => `- ${t.name}`).join("\n")
@@ -231,6 +319,11 @@ export const createAgent = (
 
     // Parse final message → DailyReport. Strip optional fences for
     // model-induced markdown wrapping.
+    if (process.env.AGENT_DEBUG_RAW === "1") {
+      process.stderr.write(
+        `[agent.run] raw final message:\n${transportOutput.finalMessage}\n[agent.run] end raw\n`
+      );
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(stripCodeFences(transportOutput.finalMessage));
@@ -251,6 +344,11 @@ export const createAgent = (
       traceId,
     });
 
+    if (process.env.AGENT_DEBUG_RAW === "1") {
+      process.stderr.write(
+        `[agent.run] raw final message:\n${transportOutput.finalMessage}\n[agent.run] end raw\n`
+      );
+    }
     const report = DailyReportSchema.parse(parsed);
 
     const groundingResult = validateGrounding(report, {
@@ -259,6 +357,12 @@ export const createAgent = (
       flag_ids: buffer.flag_ids,
     });
     if (!groundingResult.ok) {
+      if (process.env.AGENT_DEBUG_RAW === "1") {
+        process.stderr.write(
+          `[agent.run] grounding errors:\n${JSON.stringify(groundingResult.errors, null, 2)}\n` +
+            `[agent.run] trace ids: snapshot=${JSON.stringify(Array.from(buffer.snapshot_ids))} anomaly=${JSON.stringify(Array.from(buffer.anomaly_ids))} flag=${JSON.stringify(Array.from(buffer.flag_ids))}\n`
+        );
+      }
       throw new GroundingValidationError(groundingResult.errors);
     }
 
