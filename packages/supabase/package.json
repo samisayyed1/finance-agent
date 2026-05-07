@@ -1,0 +1,30 @@
+{
+  "name": "@ai-cfo/supabase",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "7.0.1",
+    "@supabase/supabase-js": "2.105.3",
+    "@t3-oss/env-nextjs": "0.13.10",
+    "react": "19.2.4",
+    "server-only": "0.0.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "@types/react": "19.2.14",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@ai-cfo/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "test": "NODE_ENV=test vitest run",
+    "test:eval": "promptfoo eval -c promptfooconfig.yaml --no-cache"
+  },
+  "dependencies": {
+    "@ai-cfo/agent": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "promptfoo": "0.121.9",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}

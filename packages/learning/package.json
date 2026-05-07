@@ -1,0 +1,26 @@
+{
+  "name": "@ai-cfo/learning",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "test": "NODE_ENV=test vitest run"
+  },
+  "dependencies": {
+    "@ai-cfo/database": "workspace:*",
+    "@ai-cfo/feedback": "workspace:*",
+    "@ai-cfo/memory": "workspace:*",
+    "@trigger.dev/sdk": "4.4.5",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}

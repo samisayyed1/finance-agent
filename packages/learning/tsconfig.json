@@ -1,0 +1,6 @@
+{
+  "extends": "@ai-cfo/typescript-config/bundler-app.json",
+  "compilerOptions": { "baseUrl": "." },
+  "include": ["src/**/*.ts", "jobs/**/*.ts"],
+  "exclude": ["node_modules"]
+}

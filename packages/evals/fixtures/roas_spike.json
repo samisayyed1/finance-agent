@@ -1,0 +1,25 @@
+{
+  "fixture": {
+    "org_id": "fixture-org",
+    "date": "2026-04-17",
+    "snapshot_id": "fixture-roasspike-2026-04-17",
+    "trace_id": "fixture-trace-roasspike",
+    "prompt_version": "v1",
+    "model": "claude-opus-4-7",
+    "content_md": "Blended MER hit 4.2x, up from 2.1x.",
+    "citations": [
+      {
+        "kind": "snapshot",
+        "id": "fixture-roasspike-2026-04-17",
+        "value": "4.2"
+      },
+      {
+        "kind": "snapshot",
+        "id": "fixture-roasspike-2026-04-16",
+        "value": "2.1"
+      }
+    ],
+    "recommendations": [],
+    "expected_features": ["MER", "4.2"]
+  }
+}

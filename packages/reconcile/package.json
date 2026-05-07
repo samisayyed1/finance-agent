@@ -1,0 +1,25 @@
+{
+  "name": "@ai-cfo/reconcile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "test": "NODE_ENV=test vitest run"
+  },
+  "dependencies": {
+    "@ai-cfo/database": "workspace:*",
+    "@ai-cfo/shared": "workspace:*",
+    "decimal.js": "10.6.0",
+    "dinero.js": "2.0.2"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "fixture": {
+    "org_id": "fixture-org",
+    "date": "2026-04-18",
+    "snapshot_id": "fixture-refundspike-2026-04-18",
+    "trace_id": "fixture-trace-refundspike",
+    "prompt_version": "v1",
+    "model": "claude-opus-4-7",
+    "content_md": "Refund rate climbed to 8.7% (vs 1.2% baseline).",
+    "citations": [
+      {
+        "kind": "snapshot",
+        "id": "fixture-refundspike-2026-04-18",
+        "value": "8.7"
+      },
+      {
+        "kind": "snapshot",
+        "id": "fixture-refundspike-baseline",
+        "value": "1.2"
+      }
+    ],
+    "recommendations": [],
+    "expected_features": ["refund rate", "8.7"]
+  }
+}

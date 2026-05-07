@@ -1,0 +1,27 @@
+{
+  "name": "@ai-cfo/database",
+  "version": "0.0.0",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "migrate": "drizzle-kit generate && drizzle-kit migrate",
+    "migrate:deploy": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio --port 3005"
+  },
+  "dependencies": {
+    "@t3-oss/env-nextjs": "0.13.10",
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.9",
+    "server-only": "0.0.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "drizzle-kit": "0.31.10",
+    "typescript": "5.9.3"
+  }
+}

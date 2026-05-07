@@ -1,0 +1,32 @@
+{
+  "fixture": {
+    "org_id": "fixture-org",
+    "date": "2026-04-16",
+    "snapshot_id": "fixture-profitdrop-2026-04-16",
+    "trace_id": "fixture-trace-profitdrop",
+    "prompt_version": "v1",
+    "model": "claude-opus-4-7",
+    "content_md": "Contribution profit dropped to $1,200 from $5,400 yesterday.",
+    "citations": [
+      {
+        "kind": "snapshot",
+        "id": "fixture-profitdrop-2026-04-16",
+        "value": 1200
+      },
+      {
+        "kind": "snapshot",
+        "id": "fixture-profitdrop-2026-04-15",
+        "value": 5400
+      }
+    ],
+    "recommendations": [
+      {
+        "recommendation_id": "rec-investigate-margin",
+        "action": "Investigate margin compression",
+        "rationale": "Profit dropped > 75% DoD — likely COGS or refund spike",
+        "impact_estimate_usd": 4200
+      }
+    ],
+    "expected_features": ["contribution profit", "$1,200"]
+  }
+}

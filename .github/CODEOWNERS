@@ -1,0 +1,13 @@
+# Default owner for everything
+*  @samisayyed1
+
+# Correctness-critical paths — Sami reviews every change
+/packages/metrics/         @samisayyed1
+/packages/reconcile/       @samisayyed1
+/packages/agent/           @samisayyed1
+/packages/memory/          @samisayyed1
+/packages/feedback/        @samisayyed1
+/packages/learning/        @samisayyed1
+/packages/evals/           @samisayyed1
+/apps/mcp/                 @samisayyed1
+/supabase/migrations/      @samisayyed1

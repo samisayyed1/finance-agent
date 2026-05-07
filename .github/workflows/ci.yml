@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: lint + typecheck + test + eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Setup Node 20 (for tools that still need it, e.g. Trigger.dev CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bun install
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Unit tests
+        run: bun run test
+
+      - name: Metrics tests (cent-exact)
+        run: bun run test:metrics
+
+      - name: Reconcile tests
+        run: bun run test:reconcile
+
+      - name: Eval (Promptfoo)
+        run: bun run test:eval
+        env:
+          # Day-0: provider is `echo`, no API key required. Day-30+ when we
+          # point at the real Anthropic provider, set ANTHROPIC_API_KEY here.
+          OPENAI_API_KEY: dummy-day0

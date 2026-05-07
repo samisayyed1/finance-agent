@@ -1,0 +1,20 @@
+{
+  "extends": [
+    "@ai-cfo/typescript-config/nextjs.json",
+    "@ai-cfo/cms/typescript-config.json"
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@ai-cfo/*": ["../../packages/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "next.config.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ]
+}

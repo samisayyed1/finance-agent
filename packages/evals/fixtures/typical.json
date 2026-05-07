@@ -1,0 +1,16 @@
+{
+  "fixture": {
+    "org_id": "fixture-org",
+    "date": "2026-04-15",
+    "snapshot_id": "fixture-typical-2026-04-15",
+    "trace_id": "fixture-trace-typical",
+    "prompt_version": "v1",
+    "model": "claude-opus-4-7",
+    "content_md": "Revenue was $42,000.",
+    "citations": [
+      { "kind": "snapshot", "id": "fixture-typical-2026-04-15", "value": 42000 }
+    ],
+    "recommendations": [],
+    "expected_features": ["revenue"]
+  }
+}

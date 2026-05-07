@@ -1,0 +1,47 @@
+{
+  "name": "ai-cfo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/connectors/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "ultracite check",
+    "lint:fix": "ultracite fix",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:metrics": "turbo run test --filter=@ai-cfo/metrics",
+    "test:reconcile": "turbo run test --filter=@ai-cfo/reconcile",
+    "test:rls": "turbo run test --filter=@ai-cfo/database-rls",
+    "test:eval": "turbo run test:eval --filter=@ai-cfo/evals",
+    "analyze": "turbo analyze",
+    "translate": "turbo translate",
+    "boundaries": "turbo boundaries",
+    "migrate": "cd packages/database && bun run migrate",
+    "migrate:deploy": "cd packages/database && bun run migrate:deploy",
+    "db:push": "cd packages/database && bun run db:push",
+    "clean": "git clean -xdf node_modules"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@biomejs/biome": "2.4.6",
+    "@turbo/gen": "2.8.14",
+    "@types/node": "25.3.5",
+    "turbo": "2.8.14",
+    "typescript": "5.9.3",
+    "ultracite": "7.2.5",
+    "vitest": "4.0.18"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "bun@1.3.13",
+  "overrides": {
+    "parse5": "7.2.1"
+  }
+}
