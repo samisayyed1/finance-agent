@@ -19,6 +19,7 @@
     "@ai-cfo/connector-stripe": "workspace:*",
     "@ai-cfo/database": "workspace:*",
     "@ai-cfo/design-system": "workspace:*",
+    "@ai-cfo/feedback": "workspace:*",
     "@ai-cfo/next-config": "workspace:*",
     "@ai-cfo/observability": "workspace:*",
     "@ai-cfo/payments": "workspace:*",

@@ -1,8 +1,4 @@
-export {
-  featureRecall,
-  groundingRate,
-  validateAgainstSchema,
-} from "./assertions";
+export { featureRecall, groundingRate, hasCitations } from "./assertions";
 
 /**
  * Per-org eval runner stub. Reads from `org_eval_set` and runs Promptfoo's

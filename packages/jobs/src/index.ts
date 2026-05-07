@@ -1,4 +1,8 @@
 export { computeDailyMetricsTask } from "./compute-daily-metrics";
+export {
+  dailyReportForOrgTask,
+  dailyReportTickTask,
+} from "./daily-report";
 export { reconcileDayTask, reconcileWindowTask } from "./reconciliation";
 export { type ApplyResult, applyNormalizedEvents } from "./shopify-apply";
 export { shopifyBackfillTask } from "./shopify-backfill";

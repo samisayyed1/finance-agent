@@ -6,42 +6,33 @@
  * rendering: rendering decides what's said; delivery decides how it travels.
  */
 
-import type { KnownBlock } from "@slack/types";
+export {
+  type SendEmailArgs,
+  type SendEmailResult,
+  sendEmail,
+} from "./resend";
+export {
+  type SendSlackArgs,
+  type SendSlackResult,
+  sendSlack,
+} from "./slack";
+export {
+  type SendWhatsAppArgs,
+  type SendWhatsAppResult,
+  sendWhatsApp,
+} from "./whatsapp";
 
-interface BaseDelivery {
+/**
+ * Day-3 stub: monthly PDF (driven by `packages/reports.toMonthlyPdf`) lands
+ * Day-5+ along with the office-skills PDF generator. The shape stays here
+ * for callers that already wire it.
+ */
+export const sendMonthlyPdf = (_args: {
+  to: string;
+  pdfBuffer: Buffer;
+  subject: string;
   traceId: string;
-}
-
-const notImplemented = (method: string): never => {
-  throw new Error(`@ai-cfo/delivery: ${method} not implemented (Day-0)`);
+  orgId: string;
+}): Promise<{ messageId: string }> => {
+  throw new Error("@ai-cfo/delivery: sendMonthlyPdf not implemented (Day-5)");
 };
-
-export const sendEmail = (
-  _args: BaseDelivery & {
-    to: string;
-    subject: string;
-    html: string;
-  }
-): Promise<{ messageId: string }> => notImplemented("sendEmail");
-
-export const sendSlack = (
-  _args: BaseDelivery & {
-    channel: string;
-    blocks: KnownBlock[];
-  }
-): Promise<{ ts: string }> => notImplemented("sendSlack");
-
-export const sendWhatsApp = (
-  _args: BaseDelivery & {
-    to: string;
-    body: string;
-  }
-): Promise<{ sid: string }> => notImplemented("sendWhatsApp");
-
-export const sendMonthlyPdf = (
-  _args: BaseDelivery & {
-    to: string;
-    pdfBuffer: Buffer;
-    subject: string;
-  }
-): Promise<{ messageId: string }> => notImplemented("sendMonthlyPdf");

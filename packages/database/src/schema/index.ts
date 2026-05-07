@@ -1,3 +1,4 @@
+export * from "./closed-loop";
 export * from "./connections";
 export * from "./metrics";
 export * from "./orders";

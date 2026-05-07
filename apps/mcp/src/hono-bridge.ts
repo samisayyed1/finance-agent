@@ -4,35 +4,29 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Context } from "hono";
 import { logger } from "./logger";
-import { tools } from "./tools";
+import { type ToolHandlerCtx, tools } from "./tools";
 
 /**
  * Hono ⇄ MCP Streamable-HTTP bridge.
  *
- * We adopt MCP SDK directly + a thin Hono adapter we own, per the project's
- * Pre-Decision 1 (no upstream @modelcontextprotocol/hono yet). ~80 LOC; trades
- * one Node-stream conversion at the boundary for full control of the MCP
- * lifecycle and OAuth interceptors.
+ * Day-3: each request builds a fresh McpServer instance with `orgId` baked
+ * into every tool handler. This trades a tiny per-request allocation for a
+ * clean RLS-scoping model and zero thread-local plumbing. We can pool
+ * McpServers later if profiling demands it.
  */
 
-export const buildMcpServer = (): McpServer => {
+export const buildMcpServerForOrg = (ctx: ToolHandlerCtx): McpServer => {
   const server = new McpServer({ name: "ai-cfo-mcp", version: "0.0.0" });
-
-  // MCP SDK 1.29 still types `inputSchema` as Zod 3 ZodRawShape; we use Zod 4.
-  // For Day-0 we register tools without a published input schema (clients see
-  // them as schema-less). Each handler still re-parses input via `tool.inputSchema`
-  // when it lands real implementation — see packages/agent for the call path.
   for (const [name, tool] of Object.entries(tools)) {
     server.registerTool(
       name,
       { description: tool.description },
       async (input: unknown) => {
-        const result = await tool.handler(input as never);
+        const result = await tool.handler(ctx, input);
         return { content: [{ type: "text", text: JSON.stringify(result) }] };
       }
     );
   }
-
   return server;
 };
 
@@ -43,8 +37,9 @@ export const buildMcpServer = (): McpServer => {
  */
 export const handleMcpRequest = async (
   c: Context,
-  server: McpServer
+  ctx: ToolHandlerCtx
 ): Promise<Response> => {
+  const server = buildMcpServerForOrg(ctx);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -105,7 +100,10 @@ export const handleMcpRequest = async (
   }
   const body = Buffer.concat(chunks);
 
-  logger.debug({ status: resStatus, bodyBytes: body.length }, "mcp response");
+  logger.debug(
+    { status: resStatus, bodyBytes: body.length, orgId: ctx.orgId },
+    "mcp response"
+  );
   return new Response(body, { status: resStatus, headers: resHeaders });
 };
 

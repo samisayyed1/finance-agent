@@ -2,6 +2,13 @@ import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { keys } from "../keys";
+import {
+  agentFeedback,
+  agentOutcomes,
+  agentTraces,
+  orgSettings,
+  reports,
+} from "./schema/closed-loop";
 import { dataConnections, rawPayloads, syncRuns } from "./schema/connections";
 import { dailyMetrics } from "./schema/metrics";
 import {
@@ -13,9 +20,10 @@ import {
 } from "./schema/orders";
 import { organizations } from "./schema/organizations";
 import { pages } from "./schema/pages";
-import { reconciliationFlags } from "./schema/reconciliation";
+import { anomalies, reconciliationFlags } from "./schema/reconciliation";
 
 export const schema = {
+  anomalies,
   pages,
   organizations,
   dataConnections,
@@ -28,6 +36,11 @@ export const schema = {
   refunds,
   payouts,
   reconciliationFlags,
+  agentTraces,
+  agentFeedback,
+  agentOutcomes,
+  reports,
+  orgSettings,
 };
 
 const globalForDb = global as unknown as {

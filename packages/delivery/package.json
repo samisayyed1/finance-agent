@@ -11,6 +11,7 @@
     "test": "NODE_ENV=test vitest run"
   },
   "dependencies": {
+    "@ai-cfo/connector-shopify": "workspace:*",
     "@ai-cfo/database": "workspace:*",
     "@slack/types": "2.16.0",
     "@slack/web-api": "7.15.2",

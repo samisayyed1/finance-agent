@@ -1,3 +1,5 @@
+import { agentFeedback, agentOutcomes, database } from "@ai-cfo/database";
+
 export type FeedbackChannel = "slack" | "email" | "dashboard" | "whatsapp";
 export type FeedbackSignal = "positive" | "negative" | "correction";
 
@@ -18,12 +20,57 @@ export interface OutcomeInput {
   wasTaken: boolean;
 }
 
-const notImplemented = (method: string): never => {
-  throw new Error(`@ai-cfo/feedback: ${method} not implemented (Day-0)`);
+export interface RecordFeedbackResult {
+  id: string;
+  recordedAt: Date;
+}
+
+export const recordFeedback = async (
+  input: FeedbackInput
+): Promise<RecordFeedbackResult> => {
+  const inserted = await database
+    .insert(agentFeedback)
+    .values({
+      orgId: input.orgId,
+      traceId: input.traceId,
+      signal: input.signal,
+      message: input.message ?? null,
+      channel: input.channel,
+      operatorUserId: input.operatorUserId ?? null,
+    })
+    .returning({ id: agentFeedback.id, createdAt: agentFeedback.createdAt });
+  const row = inserted[0];
+  if (!row) {
+    throw new Error("recordFeedback: insert returned no row");
+  }
+  return { id: row.id, recordedAt: row.createdAt };
 };
 
-export const recordFeedback = (_input: FeedbackInput): Promise<void> =>
-  notImplemented("recordFeedback");
+export interface RecordOutcomeResult {
+  id: string;
+  recordedAt: Date;
+}
 
-export const recordOutcome = (_input: OutcomeInput): Promise<void> =>
-  notImplemented("recordOutcome");
+export const recordOutcome = async (
+  input: OutcomeInput
+): Promise<RecordOutcomeResult> => {
+  const inserted = await database
+    .insert(agentOutcomes)
+    .values({
+      orgId: input.orgId,
+      recommendationId: input.recommendationId,
+      wasTaken: input.wasTaken,
+      measuredImpactUsd:
+        input.measuredImpactUsd != null
+          ? input.measuredImpactUsd.toString()
+          : null,
+      measuredAt: input.measuredImpactUsd != null ? new Date() : null,
+      notes: input.notes ?? null,
+    })
+    .returning({ id: agentOutcomes.id, createdAt: agentOutcomes.createdAt });
+  const row = inserted[0];
+  if (!row) {
+    throw new Error("recordOutcome: insert returned no row");
+  }
+  return { id: row.id, recordedAt: row.createdAt };
+};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featureRecall, groundingRate } from "..";
+import { featureRecall, groundingRate, hasCitations } from "..";
 
 describe("@ai-cfo/evals — assertions", () => {
   it("groundingRate scores 1.0 when every numeric token is cited", () => {
@@ -24,7 +24,17 @@ describe("@ai-cfo/evals — assertions", () => {
     expect(result.score).toBeCloseTo(1 / 3, 4);
   });
 
-  it("Day-0: per-org eval runner not implemented", () => {
-    expect.fail("not implemented");
+  it("hasCitations passes when fixture has at least one citation", () => {
+    const result = hasCitations("anything", {
+      vars: { fixture: { citations: [{ value: 42 }] } },
+    });
+    expect(result.pass).toBe(true);
+  });
+
+  it("hasCitations fails when fixture has zero citations", () => {
+    const result = hasCitations("anything", {
+      vars: { fixture: { citations: [] } },
+    });
+    expect(result.pass).toBe(false);
   });
 });

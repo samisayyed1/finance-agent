@@ -1,0 +1,149 @@
+import { type DailyReport, DailyReportSchema } from "@ai-cfo/agent";
+import { formatPct, severityColor, trendArrow } from "./format";
+
+/**
+ * Render a DailyReport as a self-contained HTML email body. Day-3 keeps this
+ * as plain HTML strings (no React-Email) — easier to test, no JSX in a
+ * non-React package, and the brand-friendly enrichment lives in the
+ * dashboard layer. Day-5+ we can pull in React-Email components if email
+ * polish becomes a priority.
+ */
+
+const escapeHtml = (s: string): string =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const feedbackHref = (
+  appUrl: string,
+  traceId: string,
+  signal: "positive" | "negative" | "correction"
+): string =>
+  `${appUrl}/api/feedback/inbound?trace=${encodeURIComponent(traceId)}&signal=${signal}`;
+
+export interface EmailRenderOptions {
+  /** App URL used for feedback link `?trace=&signal=`. */
+  appUrl?: string;
+  /** Org display name shown in the header. */
+  orgName?: string;
+}
+
+export const toEmailHtml = (
+  raw: DailyReport,
+  options: EmailRenderOptions = {}
+): string => {
+  const report = DailyReportSchema.parse(raw);
+  const appUrl = options.appUrl ?? "https://app.example.com";
+  const orgName = options.orgName ?? "Your business";
+
+  const headline = `
+    <h2 style="margin:24px 0 8px 0;font-size:18px;color:#0a0a0a;">
+      ${escapeHtml(report.headline.metric)}
+      <span style="font-weight:400;color:#666;">
+        ${escapeHtml(report.headline.value)} ${trendArrow(report.headline.trend)}
+        ${formatPct(report.headline.delta_pct)}
+      </span>
+    </h2>`;
+
+  const summary = `
+    <p style="margin:0 0 24px 0;color:#222;line-height:1.5;font-size:15px;">
+      ${escapeHtml(report.summary)}
+    </p>`;
+
+  const movers =
+    report.top_movers.length === 0
+      ? ""
+      : `
+    <h3 style="margin:32px 0 8px 0;font-size:16px;color:#0a0a0a;">Top movers</h3>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+      ${report.top_movers
+        .map(
+          (m) => `
+        <tr>
+          <td style="padding:8px 12px 8px 0;vertical-align:top;border-bottom:1px solid #eee;">
+            <div style="font-weight:600;color:#0a0a0a;font-size:14px;">${escapeHtml(m.metric)}</div>
+            <div style="color:#666;font-size:13px;">${escapeHtml(m.value)} (${formatPct(m.delta_pct)})</div>
+          </td>
+          <td style="padding:8px 0;color:#222;font-size:14px;line-height:1.4;border-bottom:1px solid #eee;">
+            ${escapeHtml(m.narrative)}
+          </td>
+        </tr>`
+        )
+        .join("")}
+    </table>`;
+
+  const flags =
+    report.flags.length === 0
+      ? ""
+      : `
+    <h3 style="margin:32px 0 8px 0;font-size:16px;color:#0a0a0a;">Reconciliation flags</h3>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+      ${report.flags
+        .map(
+          (f) => `
+        <tr>
+          <td style="padding:8px 12px 8px 0;vertical-align:top;border-bottom:1px solid #eee;width:120px;">
+            <span style="font-weight:600;color:${severityColor(f.severity)};font-size:13px;">
+              ${f.severity.toUpperCase()}
+            </span>
+            <div style="color:#666;font-size:12px;">${escapeHtml(f.kind)}</div>
+          </td>
+          <td style="padding:8px 0;color:#222;font-size:14px;line-height:1.4;border-bottom:1px solid #eee;">
+            ${escapeHtml(f.narrative)}
+          </td>
+        </tr>`
+        )
+        .join("")}
+    </table>`;
+
+  const actions =
+    report.actions.length === 0
+      ? ""
+      : `
+    <h3 style="margin:32px 0 8px 0;font-size:16px;color:#0a0a0a;">Recommended actions</h3>
+    <ul style="margin:0;padding-left:18px;color:#222;line-height:1.5;font-size:14px;">
+      ${report.actions
+        .map(
+          (a) => `
+        <li style="margin-bottom:8px;">
+          <strong>${escapeHtml(a.title)}</strong>${a.irreversible ? " 🔒" : ""}
+          <div style="color:#444;">${escapeHtml(a.reasoning)}</div>
+        </li>`
+        )
+        .join("")}
+    </ul>`;
+
+  const feedback = `
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;">
+      <p style="margin:0 0 12px 0;color:#444;font-size:13px;">Was this helpful?</p>
+      <a href="${feedbackHref(appUrl, report.metadata.trace_id, "positive")}" style="margin-right:12px;color:#059669;text-decoration:none;font-size:13px;">👍 Helpful</a>
+      <a href="${feedbackHref(appUrl, report.metadata.trace_id, "negative")}" style="margin-right:12px;color:#b91c1c;text-decoration:none;font-size:13px;">👎 Off-base</a>
+      <a href="${feedbackHref(appUrl, report.metadata.trace_id, "correction")}" style="color:#1d4ed8;text-decoration:none;font-size:13px;">💬 Tell me why</a>
+    </div>
+    <div style="margin-top:24px;color:#888;font-size:11px;">
+      Generated by AI Operating CFO • ${escapeHtml(report.metadata.model)} • prompt ${escapeHtml(report.metadata.prompt_version)} • trace ${escapeHtml(report.metadata.trace_id)}
+    </div>`;
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Daily report — ${escapeHtml(report.date)}</title>
+  </head>
+  <body style="margin:0;padding:32px;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0a0a0a;">
+    <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+      <h1 style="margin:0;font-size:14px;font-weight:600;color:#666;letter-spacing:0.5px;text-transform:uppercase;">
+        ${escapeHtml(orgName)} · Daily report · ${escapeHtml(report.date)}
+      </h1>
+      ${headline}
+      ${summary}
+      ${movers}
+      ${flags}
+      ${actions}
+      ${feedback}
+    </div>
+  </body>
+</html>`;
+};
