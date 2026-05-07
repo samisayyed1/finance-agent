@@ -373,9 +373,7 @@
   "config": {
     "tags": {},
     "description": "AI CFO grounding + feature-recall harness",
-    "prompts": [
-      "{{report_md}}"
-    ],
+    "prompts": ["{{report_md}}"],
     "providers": [
       {
         "id": "echo",
@@ -479,9 +477,7 @@
       "assert": [],
       "metadata": {}
     },
-    "outputPath": [
-      "./eval-results.json"
-    ],
+    "outputPath": ["./eval-results.json"],
     "extensions": [],
     "metadata": {},
     "evaluateOptions": {}

@@ -28,6 +28,10 @@ export {
   type RunInput,
   type RunResult,
 } from "./runtime/agent";
+export {
+  anthropicTransport,
+  createAnthropicTransport,
+} from "./runtime/anthropic-transport";
 export { type ToolInvocation, TraceBuffer } from "./runtime/trace-buffer";
 export type {
   AgentTransport,

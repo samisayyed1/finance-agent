@@ -13,6 +13,5 @@ describe("@ai-cfo/memory", () => {
     await expect(
       retrieveMemories({ orgId: "org-1", query: "x" })
     ).rejects.toThrow(NOT_IMPLEMENTED_RE);
-    expect.fail("not implemented");
   });
 });

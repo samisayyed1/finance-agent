@@ -11,11 +11,14 @@
     "test": "NODE_ENV=test vitest run"
   },
   "dependencies": {
+    "@ai-cfo/agent": "workspace:*",
     "@ai-cfo/connector-shopify": "workspace:*",
     "@ai-cfo/connector-stripe": "workspace:*",
     "@ai-cfo/database": "workspace:*",
+    "@ai-cfo/delivery": "workspace:*",
     "@ai-cfo/metrics": "workspace:*",
     "@ai-cfo/reconcile": "workspace:*",
+    "@ai-cfo/reports": "workspace:*",
     "@aws-sdk/client-s3": "3.1044.0",
     "@trigger.dev/sdk": "4.4.5",
     "pino": "10.3.1",

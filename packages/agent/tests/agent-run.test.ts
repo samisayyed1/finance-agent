@@ -59,17 +59,13 @@ const buildFixtureReport = (
   },
 });
 
-const makeTransport = (
-  finalReport: DailyReport,
-  toolOutputs: Record<string, unknown> = {}
-): AgentTransport => {
+const makeTransport = (finalReport: DailyReport): AgentTransport => {
   return async (input: AgentTransportInput): Promise<AgentTransportOutput> => {
     const calls: AgentTransportOutput["toolCalls"] = [];
-    // Make one tool call per descriptor (or just the first).
+    // Make one tool call per descriptor and report it back.
     for (const tool of input.tools) {
       const t0 = Date.now();
-      const out = toolOutputs[tool.name] ?? { ok: true };
-      await input.invokeTool(tool.name, {});
+      const out = await input.invokeTool(tool.name, {});
       calls.push({
         tool: tool.name,
         input: {},
@@ -100,7 +96,12 @@ describe("createAgent.run with mocked transport", () => {
         recent_anomalies: [],
       });
     }
-    return Promise.resolve({ ok: true, flag_id: FLAG_ID });
+    if (toolName === "get_reconciliation_flags") {
+      return Promise.resolve([
+        { flag_id: FLAG_ID, kind: "ORDER_MISSING_PAYMENT" },
+      ]);
+    }
+    return Promise.resolve({ ok: true });
   };
 
   it("happy path: schema-valid + grounded → returns report + traceId", async () => {
@@ -117,9 +118,7 @@ describe("createAgent.run with mocked transport", () => {
         },
       ],
       invokeTool,
-      transport: makeTransport(fixtureReport, {
-        get_reconciliation_flags: [{ flag_id: FLAG_ID }],
-      }),
+      transport: makeTransport(fixtureReport),
       persistTrace: false,
     });
     const { report, traceId } = await agent.run({
@@ -147,9 +146,7 @@ describe("createAgent.run with mocked transport", () => {
         },
       ],
       invokeTool,
-      transport: makeTransport(fixtureReport, {
-        get_reconciliation_flags: [{ flag_id: FLAG_ID }],
-      }),
+      transport: makeTransport(fixtureReport),
       persistTrace: false,
     });
     await expect(
@@ -199,12 +196,14 @@ describe("createAgent.run with mocked transport", () => {
   it("strips ```json fences from the final message", async () => {
     const fixtureReport = buildFixtureReport(SNAPSHOT_ID, FLAG_ID);
     const transport: AgentTransport = async (input) => {
+      const calls: AgentTransportOutput["toolCalls"] = [];
       for (const t of input.tools) {
-        await input.invokeTool(t.name, {});
+        const output = await input.invokeTool(t.name, {});
+        calls.push({ tool: t.name, input: {}, output, latencyMs: 1 });
       }
       return {
         finalMessage: `\`\`\`json\n${JSON.stringify(fixtureReport)}\n\`\`\``,
-        toolCalls: [],
+        toolCalls: calls,
       };
     };
     const agent = createAgent({

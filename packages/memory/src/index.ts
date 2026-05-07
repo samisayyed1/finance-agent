@@ -29,9 +29,10 @@ export interface Memory {
   valid_until?: Date;
 }
 
-const notImplemented = (method: string): never => {
-  throw new Error(`@ai-cfo/memory: ${method} not implemented (Day-0)`);
-};
+const notImplemented = <T>(method: string): Promise<T> =>
+  Promise.reject(
+    new Error(`@ai-cfo/memory: ${method} not implemented (Day-0)`)
+  );
 
 export const writeMemory = (_args: {
   orgId: string;
@@ -39,21 +40,21 @@ export const writeMemory = (_args: {
   content: string;
   sourceTraceId?: string;
   validUntil?: Date;
-}): Promise<Memory> => notImplemented("writeMemory");
+}): Promise<Memory> => notImplemented<Memory>("writeMemory");
 
 export const retrieveMemories = (_args: {
   orgId: string;
   query: string;
   k?: number;
   asOf?: Date;
-}): Promise<Memory[]> => notImplemented("retrieveMemories");
+}): Promise<Memory[]> => notImplemented<Memory[]>("retrieveMemories");
 
 export const buildKnowledgeGraph = (_args: {
   orgId: string;
   traceId: string;
-}): Promise<void> => notImplemented("buildKnowledgeGraph");
+}): Promise<void> => notImplemented<void>("buildKnowledgeGraph");
 
 export const forgetMemory = (_args: {
   orgId: string;
   memoryId: string;
-}): Promise<void> => notImplemented("forgetMemory");
+}): Promise<void> => notImplemented<void>("forgetMemory");

@@ -99,6 +99,64 @@ interface AgentDeps {
   promptTemplate: string;
 }
 
+const persistAgentTrace = async (args: {
+  orgId: string;
+  traceId: string;
+  date: string;
+  report: DailyReport;
+  latencyMs: number;
+  inputTokens: number | undefined;
+  outputTokens: number | undefined;
+  buffer: TraceBuffer;
+  model: string;
+  promptVersion: string;
+}): Promise<void> => {
+  try {
+    await database.insert(agentTraces).values({
+      orgId: args.orgId,
+      traceId: args.traceId,
+      tool: "daily_report",
+      inputJsonb: { date: args.date },
+      outputJsonb: { report: args.report },
+      latencyMs: args.latencyMs,
+      inputTokens: args.inputTokens ?? null,
+      outputTokens: args.outputTokens ?? null,
+      snapshotIds: Array.from(args.buffer.snapshot_ids),
+      anomalyIds: Array.from(args.buffer.anomaly_ids),
+      flagIds: Array.from(args.buffer.flag_ids),
+      model: args.model,
+      promptVersion: args.promptVersion,
+    });
+  } catch (e) {
+    process.stderr.write(
+      `agent.run: trace persist failed: ${e instanceof Error ? e.message : String(e)}\n`
+    );
+  }
+};
+
+const injectMetadata = (
+  parsed: unknown,
+  meta: {
+    model: string;
+    promptVersion: string;
+    generatedAt: string;
+    traceId: string;
+  }
+): void => {
+  if (typeof parsed !== "object" || parsed === null) {
+    return;
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.metadata !== "object" || obj.metadata === null) {
+    obj.metadata = {};
+  }
+  const md = obj.metadata as Record<string, unknown>;
+  md.model = meta.model;
+  md.prompt_version = meta.promptVersion;
+  md.generated_at = meta.generatedAt;
+  md.trace_id = meta.traceId;
+};
+
 const defaultPromptTemplate = (): string => {
   // Embedded at package-build time so consumers don't need a runtime
   // file-read. The .md file under src/prompts is the canonical edit surface.
@@ -150,31 +208,26 @@ export const createAgent = (
       reportDate: ISO_DATE(input.date),
     });
 
-    // Wrap the caller's invokeTool so each call is captured in the trace
-    // buffer with latency. We measure wall time around the call.
-    const wrappedInvokeTool = async (
-      toolName: string,
-      toolInput: unknown
-    ): Promise<unknown> => {
-      const t0 = Date.now();
-      const output = await opts.invokeTool(toolName, toolInput);
-      const latencyMs = Date.now() - t0;
-      buffer.recordInvocation({
-        tool: toolName,
-        input: toolInput,
-        output,
-        latency_ms: latencyMs,
-      });
-      return output;
-    };
-
+    // The transport is the source of truth for what tools were called and
+    // with what response (the Anthropic SDK path drives MCP itself, so we
+    // can't intercept inline). After the transport returns we feed every
+    // call into the trace buffer; harvestIds extracts citation tokens.
     const transportOutput = await opts.transport({
       systemPrompt,
       userMessage: `Produce the DailyReport for ${ISO_DATE(input.date)}.`,
       tools: opts.toolDescriptors,
-      invokeTool: wrappedInvokeTool,
+      invokeTool: opts.invokeTool,
       model,
     });
+
+    for (const call of transportOutput.toolCalls) {
+      buffer.recordInvocation({
+        tool: call.tool,
+        input: call.input,
+        output: call.output,
+        latency_ms: call.latencyMs,
+      });
+    }
 
     // Parse final message → DailyReport. Strip optional fences for
     // model-induced markdown wrapping.
@@ -191,25 +244,12 @@ export const createAgent = (
 
     // Inject runtime metadata before schema validation so the model doesn't
     // have to know its own trace_id ahead of time.
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "metadata" in (parsed as Record<string, unknown>) &&
-      typeof (parsed as Record<string, unknown>).metadata === "object"
-    ) {
-      const md = (parsed as Record<string, Record<string, unknown>>).metadata;
-      md.model = model;
-      md.prompt_version = promptVersion;
-      md.generated_at = now().toISOString();
-      md.trace_id = traceId;
-    } else {
-      (parsed as Record<string, unknown>).metadata = {
-        model,
-        prompt_version: promptVersion,
-        generated_at: now().toISOString(),
-        trace_id: traceId,
-      };
-    }
+    injectMetadata(parsed, {
+      model,
+      promptVersion,
+      generatedAt: now().toISOString(),
+      traceId,
+    });
 
     const report = DailyReportSchema.parse(parsed);
 
@@ -223,32 +263,18 @@ export const createAgent = (
     }
 
     if (persistTrace) {
-      const finishedAt = now();
-      const latencyMs = finishedAt.getTime() - startedAt.getTime();
-      try {
-        await database.insert(agentTraces).values({
-          orgId,
-          traceId,
-          tool: "daily_report",
-          inputJsonb: { date: ISO_DATE(input.date) },
-          outputJsonb: { report },
-          latencyMs,
-          inputTokens: transportOutput.inputTokens ?? null,
-          outputTokens: transportOutput.outputTokens ?? null,
-          snapshotIds: Array.from(buffer.snapshot_ids),
-          anomalyIds: Array.from(buffer.anomaly_ids),
-          flagIds: Array.from(buffer.flag_ids),
-          model,
-          promptVersion,
-        });
-      } catch (e) {
-        // Trace persistence failure must not bury a successful run; we
-        // surface a warning but still return the report. pino lives at
-        // apps/api; the agent package stays dep-light.
-        process.stderr.write(
-          `agent.run: trace persist failed: ${e instanceof Error ? e.message : String(e)}\n`
-        );
-      }
+      await persistAgentTrace({
+        orgId,
+        traceId,
+        date: ISO_DATE(input.date),
+        report,
+        latencyMs: now().getTime() - startedAt.getTime(),
+        inputTokens: transportOutput.inputTokens,
+        outputTokens: transportOutput.outputTokens,
+        buffer,
+        model,
+        promptVersion,
+      });
     }
 
     return { report, traceId };

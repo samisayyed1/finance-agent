@@ -14,11 +14,72 @@
  * upserts the `reports` row.
  */
 
-import { database, eq, orgSettings, reports } from "@ai-cfo/database";
+import { anthropicTransport, createAgent } from "@ai-cfo/agent";
+import {
+  database,
+  eq,
+  organizations,
+  orgSettings,
+  reports,
+} from "@ai-cfo/database";
+import { sendEmail, sendSlack } from "@ai-cfo/delivery";
 import { computeDailyMetrics } from "@ai-cfo/metrics";
 import { runReconciliation } from "@ai-cfo/reconcile";
+import { toEmailHtml, toMarkdown, toSlackBlocks } from "@ai-cfo/reports";
 import { logger, schedules, schemaTask, tasks } from "@trigger.dev/sdk";
 import { z } from "zod";
+
+const TOOL_DESCRIPTORS = [
+  {
+    name: "get_daily_snapshot",
+    description:
+      "Return the cent-exact daily metrics snapshot for a given date for the requesting org, plus open-flag count and recent anomalies.",
+    parameters: { type: "object", properties: { date: { type: "string" } } },
+  },
+  {
+    name: "get_metric_history",
+    description:
+      "Return a time series of one metric for the last N days. Each row carries snapshot_id for citation.",
+    parameters: {
+      type: "object",
+      properties: {
+        metric: { type: "string" },
+        days: { type: "number" },
+        asOf: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "list_anomalies",
+    description:
+      "List anomalies on a given date and the prior 7 days. Each row's anomaly_id is the citation token.",
+    parameters: { type: "object", properties: { date: { type: "string" } } },
+  },
+  {
+    name: "get_reconciliation_flags",
+    description:
+      "List reconciliation flags within a date range, optionally filtered by status.",
+    parameters: {
+      type: "object",
+      properties: {
+        date_range: {
+          type: "object",
+          properties: {
+            start: { type: "string" },
+            end: { type: "string" },
+          },
+        },
+        status: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "get_sync_health",
+    description:
+      "Return the sync status of every connected data source for the requesting org.",
+    parameters: { type: "object", properties: {} },
+  },
+];
 
 const orgInputSchema = z.object({
   orgId: z.string().uuid(),
@@ -122,44 +183,8 @@ export const dailyReportForOrgTask = schemaTask({
       end: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000),
     });
 
-    // 3. Agent run is wired conditionally — Day-3 the real Anthropic
-    //    transport ships in a follow-up commit. We surface the agent step
-    //    as a log entry here; once `runWithAnthropic` is plumbed (Day-3.1)
-    //    this becomes a real `createAgent({ orgId }).run({ date: targetDate })`.
-    logger.info(
-      "daily-report-for-org: agent run pending real transport wiring",
-      {
-        orgId,
-        date,
-        revenueGross: metrics.revenue_gross,
-        revenueNet: metrics.revenue_net,
-        reconcileFlags:
-          reconcileResult.orderMissingPayment +
-          reconcileResult.paymentWithoutOrder,
-      }
-    );
-
-    // 4. Persist a reports row stub. Real content_jsonb + content_md ship
-    //    once the agent transport is real.
-    const traceId = `pending_trace_${date}_${orgId.slice(0, 8)}`;
-    const snapshotId = metrics.snapshot_id;
-    await database
-      .insert(reports)
-      .values({
-        orgId,
-        date,
-        snapshotId,
-        promptVersion: "daily-report-v1",
-        model: process.env.ANTHROPIC_AGENT_MODEL ?? "claude-opus-4-7",
-        contentJsonb: { metrics, reconcileResult },
-        contentMd:
-          "Pending: real agent run lands once Anthropic transport is wired (Day-3.1).",
-        deliveryStatus: {},
-        aiTraceId: traceId,
-      })
-      .onConflictDoNothing();
-
-    // 5. Lookup org_settings to gate delivery channels.
+    // 3. Lookup org_settings before the agent run — we need the org name
+    //    + bearer + channels regardless of whether the LLM path succeeds.
     const settingsRows = await database
       .select()
       .from(orgSettings)
@@ -169,27 +194,121 @@ export const dailyReportForOrgTask = schemaTask({
     if (!settings) {
       logger.warn(
         "daily-report-for-org: no org_settings row; skipping delivery",
-        {
-          orgId,
-        }
+        { orgId }
       );
       return { ok: false, reason: "no_org_settings" };
     }
 
-    // Email + Slack delivery is gated. Day-3 leaves the actual `sendEmail`
-    // / `sendSlack` calls behind a fully-wired agent run; the orchestrator
-    // shape is in place so Day-3.1 just plugs in the real transport.
+    // 4. Agent run via the production Anthropic transport. The transport
+    //    reads MCP_SERVER_URL + MCP_BEARER from the environment; the bearer
+    //    must encode the orgId (`dev:<orgId>` for non-prod, Clerk JWT for
+    //    prod). For Day-3.1 we mint the dev token; the prod replacement
+    //    lands when Clerk-JWT minting is wired.
+    process.env.MCP_BEARER ??= `dev:${orgId}`;
+
+    const snapshotId = metrics.snapshot_id;
+    const model = process.env.ANTHROPIC_AGENT_MODEL ?? "claude-opus-4-7";
+
+    const orgRows = await database
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    const orgName = orgRows[0]?.name ?? "your business";
+
+    const agent = createAgent({
+      orgId,
+      orgName,
+      toolDescriptors: TOOL_DESCRIPTORS,
+      invokeTool: () => Promise.resolve({}),
+      transport: anthropicTransport,
+      model,
+      persistTrace: true,
+    });
+    let agentResult: Awaited<ReturnType<typeof agent.run>>;
+    try {
+      agentResult = await agent.run({ date: targetDate });
+    } catch (err) {
+      logger.error("daily-report-for-org: agent run failed", { err, orgId });
+      return { ok: false, reason: "agent_run_failed" };
+    }
+    const { report, traceId } = agentResult;
+
+    // 5. Persist the reports row with the rendered content.
+    const contentMd = toMarkdown(report);
+    await database
+      .insert(reports)
+      .values({
+        orgId,
+        date,
+        snapshotId,
+        promptVersion: "daily-report-v1",
+        model,
+        contentJsonb: { report, metrics, reconcileResult },
+        contentMd,
+        deliveryStatus: {},
+        aiTraceId: traceId,
+      })
+      .onConflictDoNothing();
+
+    // 6. Channel-gated delivery.
+    let emailDelivery: "skipped" | "sent" | "failed" = "skipped";
+    let slackDelivery: "skipped" | "sent" | "failed" = "skipped";
+
+    // Day-3.1: org_settings does not yet carry per-org delivery email; fall
+    // back to env. Schema column lands when multi-recipient delivery ships.
+    const emailTo = process.env.DAILY_REPORT_EMAIL_TO;
+    if (settings.deliveryEmailEnabled && emailTo) {
+      try {
+        const html = toEmailHtml(report);
+        await sendEmail({
+          orgId,
+          traceId,
+          to: emailTo,
+          subject: `Daily report — ${date}`,
+          html,
+        });
+        emailDelivery = "sent";
+      } catch (err) {
+        logger.warn("daily-report-for-org: email delivery failed", {
+          err,
+          orgId,
+        });
+        emailDelivery = "failed";
+      }
+    }
+
+    if (settings.deliverySlackEnabled && settings.slackChannelId) {
+      try {
+        const blocks = toSlackBlocks(report);
+        await sendSlack({
+          orgId,
+          traceId,
+          channel: settings.slackChannelId,
+          blocks,
+        });
+        slackDelivery = "sent";
+      } catch (err) {
+        logger.warn("daily-report-for-org: slack delivery failed", {
+          err,
+          orgId,
+        });
+        slackDelivery = "failed";
+      }
+    }
+
     return {
       ok: true,
       orgId,
       date,
       snapshotId,
+      traceId,
       revenueGross: metrics.revenue_gross,
       reconcileFlags:
         reconcileResult.orderMissingPayment +
         reconcileResult.paymentWithoutOrder,
-      deliveryEmail: settings.deliveryEmailEnabled,
-      deliverySlack: settings.deliverySlackEnabled,
+      deliveryEmail: emailDelivery,
+      deliverySlack: slackDelivery,
     };
   },
 });
