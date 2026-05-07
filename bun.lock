@@ -20,15 +20,19 @@
       "dependencies": {
         "@ai-cfo/analytics": "workspace:*",
         "@ai-cfo/auth": "workspace:*",
+        "@ai-cfo/connector-shopify": "workspace:*",
         "@ai-cfo/database": "workspace:*",
         "@ai-cfo/design-system": "workspace:*",
         "@ai-cfo/next-config": "workspace:*",
         "@ai-cfo/observability": "workspace:*",
         "@ai-cfo/payments": "workspace:*",
+        "@aws-sdk/client-s3": "3.1044.0",
         "@sentry/nextjs": "^10.42.0",
         "@t3-oss/env-nextjs": "^0.13.10",
+        "@trigger.dev/sdk": "4.4.5",
         "import-in-the-middle": "^3.0.0",
         "next": "16.1.6",
+        "pino": "10.3.1",
         "react": "19.2.4",
         "react-dom": "19.2.4",
         "require-in-the-middle": "8.0.1",
@@ -338,7 +342,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@ai-cfo/shared": "workspace:*",
-        "@shopify/shopify-api": "13.0.0",
         "zod": "4.3.6",
       },
       "devDependencies": {
@@ -527,6 +530,25 @@
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
         "next": "16.1.6",
+      },
+    },
+    "packages/jobs": {
+      "name": "@ai-cfo/jobs",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ai-cfo/connector-shopify": "workspace:*",
+        "@ai-cfo/database": "workspace:*",
+        "@ai-cfo/metrics": "workspace:*",
+        "@aws-sdk/client-s3": "3.1044.0",
+        "@trigger.dev/sdk": "4.4.5",
+        "pino": "10.3.1",
+        "zod": "4.3.6",
+      },
+      "devDependencies": {
+        "@ai-cfo/typescript-config": "workspace:*",
+        "@types/node": "25.3.5",
+        "typescript": "5.9.3",
+        "vitest": "4.0.18",
       },
     },
     "packages/learning": {
@@ -809,6 +831,8 @@
     "@ai-cfo/feedback": ["@ai-cfo/feedback@workspace:packages/feedback"],
 
     "@ai-cfo/internationalization": ["@ai-cfo/internationalization@workspace:packages/internationalization"],
+
+    "@ai-cfo/jobs": ["@ai-cfo/jobs@workspace:packages/jobs"],
 
     "@ai-cfo/learning": ["@ai-cfo/learning@workspace:packages/learning"],
 
@@ -1924,14 +1948,6 @@
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
-    "@shopify/admin-api-client": ["@shopify/admin-api-client@1.1.2", "", { "dependencies": { "@shopify/graphql-client": "^1.4.2" } }, "sha512-sV5gS8x4kj0KLULlOJkoBzm+tu6tn+1PCK9a6inySv5qtzmf/JxDWtLgaW9vRXeXHo/Sl/p3mBWhY3//fKA8iw=="],
-
-    "@shopify/graphql-client": ["@shopify/graphql-client@1.4.2", "", {}, "sha512-C/fEyx6BZmTGeJv0HSsduhfn5ZbkXk0nePkyo0+xXxorP1I+uvx9pobdFxTfiPnOrh+P6QiKzBgIviksnSo4YA=="],
-
-    "@shopify/shopify-api": ["@shopify/shopify-api@13.0.0", "", { "dependencies": { "@shopify/admin-api-client": "^1.1.2", "@shopify/graphql-client": "^1.4.2", "@shopify/storefront-api-client": "^1.0.10", "compare-versions": "^6.1.1", "isbot": "^5.1.34", "jose": "^5.9.6", "lossless-json": "^4.3.0", "tslib": "^2.8.1" } }, "sha512-tf55PjnIoDY6wjv9gJB1FMYoRmalUCdB8ayPLlPwmDUzCRCKfbQdKrBEX1jnKRmSm7EvtjkUSqbI60v0/jAk9Q=="],
-
-    "@shopify/storefront-api-client": ["@shopify/storefront-api-client@1.0.10", "", { "dependencies": { "@shopify/graphql-client": "^1.4.2" } }, "sha512-A0ItFW58L5+y/jnnJDEsmt2YcQSt2BG+pNoQOYRpPBJaOLpTj7A13q1QVrE5XYVGZCA6ZQ6FqAtgosHHrkut0Q=="],
-
     "@simple-git/args-pathspec": ["@simple-git/args-pathspec@1.0.3", "", {}, "sha512-ngJMaHlsWDTfjyq9F3VIQ8b7NXbBLq5j9i5bJ6XLYtD6qlDXT7fdKY2KscWWUF8t18xx052Y/PUO1K1TRc9yKA=="],
 
     "@simple-git/argv-parser": ["@simple-git/argv-parser@1.1.1", "", { "dependencies": { "@simple-git/args-pathspec": "^1.0.3" } }, "sha512-Q9lBcfQ+VQCpQqGJFHe5yooOS5hGdLFFbJ5R+R5aDsnkPCahtn1hSkMcORX65J2Z5lxSkD0lQorMsncuBQxYUw=="],
@@ -2644,8 +2660,6 @@
 
     "commondir": ["commondir@1.0.1", "", {}, "sha512-W9pAhw0ja1Edb5GVdIF1mjZw/ASI0AlShXM83UUGe2DVr5TdAPEA1OA8m/g8zWp9x6On7gqufY+FatDbC3MDQg=="],
 
-    "compare-versions": ["compare-versions@6.1.1", "", {}, "sha512-4hm4VPpIecmlg59CHXnRDnqGplJFrbLG4aFEl5vl6cK1u76ws3LLvX7ikFnTDl5vo39sjWD6AaDPYodJp/NNHg=="],
-
     "complex.js": ["complex.js@2.4.3", "", {}, "sha512-UrQVSUur14tNX6tiP4y8T4w4FeJAX3bi2cIv0pu/DTLFNxoq7z2Yh83Vfzztj6Px3X/lubqQ9IrPp7Bpn6p4MQ=="],
 
     "compressible": ["compressible@2.0.18", "", { "dependencies": { "mime-db": ">= 1.43.0 < 2" } }, "sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg=="],
@@ -3298,8 +3312,6 @@
 
     "isbinaryfile": ["isbinaryfile@4.0.10", "", {}, "sha512-iHrqe5shvBUcFbmZq9zOQHBoeOhZJu6RQGrDpBgenUm/Am+F3JM2MgQj+rK3Z601fzrL5gLZWtAPH2OBaSVcyw=="],
 
-    "isbot": ["isbot@5.1.40", "", {}, "sha512-yNeeynhhtIVRBk12tBV4eHNxwB42HzR4Q3Ea7vCOiJhImGaAIdIMrbJtacQlBizGLjUPw+akkFI5Dn9T70XoVQ=="],
-
     "isexe": ["isexe@2.0.0", "", {}, "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="],
 
     "iso-3166-1": ["iso-3166-1@2.1.1", "", {}, "sha512-RZxXf8cw5Y8LyHZIwIRvKw8sWTIHh2/txBT+ehO0QroesVfnz3JNFFX4i/OC/Yuv2bDIVYrHna5PMvjtpefq5w=="],
@@ -3451,8 +3463,6 @@
     "long": ["long@4.0.0", "", {}, "sha512-XsP+KhQif4bjX1kbuSiySJFNAehNxgLb6hPRGJ9QsUr8ajHkuXGdrHmFUTUUXhDwVX2R5bY4JNZEwbUiMhV+MA=="],
 
     "longest-streak": ["longest-streak@3.1.0", "", {}, "sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g=="],
-
-    "lossless-json": ["lossless-json@4.3.0", "", {}, "sha512-ToxOC+SsduRmdSuoLZLYAr5zy1Qu7l5XhmPWM3zefCZ5IcrzW/h108qbJUKfOlDlhvhjUK84+8PSVX0kxnit0g=="],
 
     "lower-case": ["lower-case@1.1.4", "", {}, "sha512-2Fgx1Ycm599x+WGpIYwJOvsjmXFzTSc34IwDWALRA/8AopUKAVPwfJ+h5+f85BCp0PWmmJcWzEpxOpoXycMpdA=="],
 
@@ -4831,8 +4841,6 @@
     "@sentry/vercel-edge/@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
     "@shikijs/transformers/shiki": ["shiki@1.17.7", "", { "dependencies": { "@shikijs/core": "1.17.7", "@shikijs/engine-javascript": "1.17.7", "@shikijs/engine-oniguruma": "1.17.7", "@shikijs/types": "1.17.7", "@shikijs/vscode-textmate": "^9.2.2", "@types/hast": "^3.0.4" } }, "sha512-Zf6hNtWhFyF4XP5OOsXkBTEx9JFPiN0TQx4wSe+Vqeuczewgk2vT4IZhF4gka55uelm052BD5BaHavNqUNZd+A=="],
-
-    "@shopify/shopify-api/jose": ["jose@5.10.0", "", {}, "sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg=="],
 
     "@slack/bolt/@slack/types": ["@slack/types@2.21.0", "", {}, "sha512-ZLMsKnD5KLRPmhFEoGoBQUD5Pc2bH3xFc5ygHlioEc0WmLGyZGoGCtMff4rpejrFnptrhfxcKpWxW4r3g39R0A=="],
 

@@ -11,15 +11,33 @@ Iron Rule #4: Raw API payloads live in R2 and are **immutable**. Normalized data
 
 ## Setup
 1. Create bucket in Cloudflare R2 dashboard.
-2. Generate API token scoped to that bucket; set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` in `.env`.
-3. Configure Object Lock with governance mode: 7 years.
-4. Set lifecycle rule: transition to Cold storage after 30 days (cuts cost; raw payloads aren't read often).
+2. Generate API token scoped to that bucket; set in `.env.local`:
+   - `R2_ACCOUNT_ID` (Cloudflare account ID).
+   - `R2_ACCESS_KEY_ID`
+   - `R2_SECRET_ACCESS_KEY`
+   - `R2_BUCKET` (the bucket name itself, e.g. `ai-cfo-raw-dev`).
+3. Configure Object Lock with governance mode: **7-year retention** (matches financial audit norms; CFO clients regulated by IRS, HMRC, etc. expect this).
+4. Lifecycle rule: transition to **Infrequent Access** storage class after 30 days (raw payloads are rarely read after the first week; saves ~50% on storage cost).
 
 ## Code path
-- Webhook handler in `apps/api/app/webhooks/<source>/route.ts` writes to R2 via `@aws-sdk/client-s3` (R2 is S3-compatible).
-- The DB row in `raw_payloads.r2_key` is the only mutable pointer; the object itself is never updated.
-- Reconciliation / replay jobs read R2 via the same key path.
+- **Webhook ingestion**: `apps/api/app/webhooks/shopify/route.ts` → `apps/api/app/lib/r2.ts::putRawPayload()` writes the raw HTTP body verbatim. Body bytes are exactly what was HMAC-signed; never re-serialized.
+- **Backfill ingestion**: `packages/jobs/src/shopify-backfill.ts` → `packages/jobs/src/r2-put.ts::putRawJson()` writes JSON-stringified Admin API page entries.
+- **Normalize re-fetch**: `packages/jobs/src/shopify-normalize.ts` → `packages/jobs/src/r2-fetch.ts::fetchRawPayload()` reads via the `r2_key` column on `raw_payloads`.
+- The DB row's `raw_payloads.r2_key` is the only mutable pointer; the R2 object itself is never updated.
+
+## Key partition rationale
+- `org_id/` first → bulk export per tenant is one prefix-listing.
+- `source/` next → per-vendor replay flows.
+- `YYYY/MM/DD/` keeps directory listings tractable (Shopify-only brands at $1M/mo do ~100–500 webhooks/day; that's a manageable number per leaf prefix).
+- `{event_id}.json` is globally unique within the partition (Shopify webhook ids are GUID-shaped).
 
 ## Disaster recovery
 - Replicate to a second R2 region weekly via Cloudflare's bucket replication.
-- Postgres rebuild test (quarterly): nuke `agent_traces` for a test org, replay raw payloads through the parse + reconcile pipeline, diff `daily_metrics` against the replica before the nuke.
+- **Postgres rebuild test** (quarterly): nuke a test org's `orders`/`payments`/`refunds`, re-run the normalize pipeline against R2 raw payloads, diff `daily_metrics` against the snapshot taken before the nuke. Iron Rule #4 invariant: this diff must be empty.
+
+## Manual Day-1 checklist for Sami
+- [ ] Cloudflare R2 enabled on the account (free tier covers Day-1 volume).
+- [ ] Two buckets created: `ai-cfo-raw-dev`, `ai-cfo-raw-prod`.
+- [ ] Object Lock = governance, 7 years (per env).
+- [ ] API token scoped to each bucket; secrets pasted into the matching `.env.<env>` file.
+- [ ] Region replication enabled for prod bucket.

@@ -2,38 +2,137 @@
  * @ai-cfo/metrics — cent-exact daily metrics computation.
  *
  * Iron Rule #1: the LLM never computes a number. It calls
- * `compute_daily_metrics(orgId, date)` (here) via MCP. All monetary arithmetic
+ * `computeDailyMetrics(orgId, date)` (here) via MCP. All monetary arithmetic
  * uses Dinero.js — never raw `number`.
- *
- * Day-0: function signature is real, body throws "not implemented".
  */
 
-export interface DailyMetrics {
-  ad_spend: number;
-  aov: number;
-  blended_mer: number;
-  cac: number;
-  computed_at: string; // ISO datetime
-  contribution_profit: number;
-  date: string; // ISO YYYY-MM-DD
-  fees: number;
-  gross_margin: number;
-  new_customers: number;
-  orders: number;
-  org_id: string;
-  refund_rate: number;
-  refunds: number;
-  revenue_gross: number;
-  revenue_net: number;
-  roas: number;
-  snapshot_id: string;
+import {
+  and,
+  dailyMetrics,
+  database,
+  eq,
+  gte,
+  lt,
+  orders,
+  refunds,
+} from "@ai-cfo/database";
+import {
+  computeShopifyDailyMetricsFromRows,
+  type ShopifyDailyMetricsOutput,
+} from "./compute-daily-metrics";
+
+export {
+  computeShopifyDailyMetricsFromRows,
+  type OrderRow,
+  type RefundRow,
+  type ShopifyDailyMetricsInput,
+  type ShopifyDailyMetricsOutput,
+} from "./compute-daily-metrics";
+export {
+  decimalStringToMinor,
+  dineroFromMinor,
+  dineroToDecimalString,
+  dineroZero,
+  sumDinero,
+} from "./money";
+
+const startOfUtcDay = (d: Date): Date =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+const startOfNextUtcDay = (d: Date): Date => {
+  const start = startOfUtcDay(d);
+  start.setUTCDate(start.getUTCDate() + 1);
+  return start;
+};
+
+export interface ComputeArgs {
+  date: Date;
+  orgId: string;
+  /** Restrict computation to a single source. Day-1 only 'shopify' is supported. */
+  source?: "shopify";
 }
 
-export const compute_daily_metrics = (
-  _orgId: string,
-  _date: Date
-): Promise<DailyMetrics> => {
-  throw new Error(
-    "@ai-cfo/metrics: compute_daily_metrics not implemented (Day-0)"
-  );
+export const computeDailyMetrics = async (
+  args: ComputeArgs
+): Promise<ShopifyDailyMetricsOutput> => {
+  const dayStart = startOfUtcDay(args.date);
+  const dayEnd = startOfNextUtcDay(args.date);
+
+  const ordersForDate = await database
+    .select({
+      source: orders.source,
+      currency: orders.currency,
+      total: orders.total,
+      createdAtSource: orders.createdAtSource,
+      cancelledAtSource: orders.cancelledAtSource,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.orgId, args.orgId),
+        eq(orders.source, "shopify"),
+        gte(orders.createdAtSource, dayStart),
+        lt(orders.createdAtSource, dayEnd)
+      )
+    );
+
+  const refundsForDate = await database
+    .select({
+      source: refunds.source,
+      currency: refunds.currency,
+      amount: refunds.amount,
+      processedAt: refunds.processedAt,
+    })
+    .from(refunds)
+    .where(
+      and(
+        eq(refunds.orgId, args.orgId),
+        eq(refunds.source, "shopify"),
+        gte(refunds.processedAt, dayStart),
+        lt(refunds.processedAt, dayEnd)
+      )
+    );
+
+  const result = computeShopifyDailyMetricsFromRows({
+    orgId: args.orgId,
+    date: args.date,
+    ordersForDate,
+    refundsForDate,
+  });
+
+  await database
+    .insert(dailyMetrics)
+    .values({
+      orgId: args.orgId,
+      date: result.date,
+      snapshotId: result.snapshot_id,
+      revenueGross: result.revenue_gross,
+      revenueNet: result.revenue_net,
+      refunds: result.refunds,
+      fees: result.fees,
+      adSpend: result.ad_spend,
+      grossMargin: result.gross_margin,
+      contributionProfit: result.contribution_profit,
+      roas: result.roas,
+      blendedMer: result.blended_mer,
+      cac: result.cac,
+      aov: result.aov,
+      orders: result.orders,
+      newCustomers: result.new_customers,
+      refundRate: result.refund_rate,
+    })
+    .onConflictDoUpdate({
+      target: [dailyMetrics.orgId, dailyMetrics.date],
+      set: {
+        snapshotId: result.snapshot_id,
+        revenueGross: result.revenue_gross,
+        revenueNet: result.revenue_net,
+        refunds: result.refunds,
+        aov: result.aov,
+        orders: result.orders,
+        computedAt: new Date(),
+      },
+    });
+
+  return result;
 };

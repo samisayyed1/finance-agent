@@ -2,9 +2,31 @@ import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { keys } from "../keys";
+import { dataConnections, rawPayloads, syncRuns } from "./schema/connections";
+import { dailyMetrics } from "./schema/metrics";
+import {
+  orderLineItems,
+  orders,
+  payments,
+  payouts,
+  refunds,
+} from "./schema/orders";
+import { organizations } from "./schema/organizations";
 import { pages } from "./schema/pages";
 
-export const schema = { pages };
+export const schema = {
+  pages,
+  organizations,
+  dataConnections,
+  syncRuns,
+  rawPayloads,
+  dailyMetrics,
+  orders,
+  orderLineItems,
+  payments,
+  refunds,
+  payouts,
+};
 
 const globalForDb = global as unknown as {
   __aiCfoDbClient: postgres.Sql | undefined;
