@@ -61,6 +61,60 @@ const stripMcpPrefix = (toolName: string): string => {
   return toolName;
 };
 
+// MCP tool responses arrive in one of two shapes that the Claude Agent SDK
+// passes through to the PostToolUse hook:
+//   1. The bare `content` array: `[{type:"text", text:"<json>"}, ...]`
+//   2. The wrapped envelope: `{content: [...], structuredContent?: ...}`
+// The trace buffer's harvestIds walks structured objects for
+// snapshot_id / anomaly_id / flag_id string fields — it cannot peer inside
+// a JSON-encoded `text` blob. Unwrap to the real shape; otherwise grounding
+// flags every citation as unreachable even though the run was clean.
+const unwrapTextParts = (parts: unknown[]): unknown | null => {
+  const parsed: unknown[] = [];
+  for (const part of parts) {
+    if (typeof part !== "object" || part === null) {
+      return null;
+    }
+    const p = part as Record<string, unknown>;
+    if (p.type !== "text" || typeof p.text !== "string") {
+      return null;
+    }
+    try {
+      parsed.push(JSON.parse(p.text as string));
+    } catch {
+      return null;
+    }
+  }
+  if (parsed.length === 1) {
+    return parsed[0];
+  }
+  return parsed;
+};
+
+const unwrapMcpToolResponse = (response: unknown): unknown => {
+  if (Array.isArray(response)) {
+    const unwrapped = unwrapTextParts(response);
+    if (unwrapped !== null) {
+      return unwrapped;
+    }
+    return response;
+  }
+  if (typeof response !== "object" || response === null) {
+    return response;
+  }
+  const r = response as Record<string, unknown>;
+  if (r.structuredContent !== undefined) {
+    return r.structuredContent;
+  }
+  if (Array.isArray(r.content)) {
+    const unwrapped = unwrapTextParts(r.content);
+    if (unwrapped !== null) {
+      return unwrapped;
+    }
+  }
+  return response;
+};
+
 const STOP_REASON_OK = new Set(["end_turn", "stop_sequence", "max_tokens"]);
 
 export const createAnthropicTransport = (
@@ -86,6 +140,11 @@ export const createAnthropicTransport = (
     const preToolUseHook = (
       h: { hook_event_name: string } & Record<string, unknown>
     ) => {
+      if (process.env.AGENT_DEBUG_RAW === "1") {
+        process.stderr.write(
+          `[transport] PreToolUse: tool=${String(h.tool_name)} id=${String(h.tool_use_id)}\n`
+        );
+      }
       if (h.hook_event_name === "PreToolUse") {
         pending.set(h.tool_use_id as string, {
           tool: stripMcpPrefix(h.tool_name as string),
@@ -99,6 +158,15 @@ export const createAnthropicTransport = (
     const postToolUseHook = (
       h: { hook_event_name: string } & Record<string, unknown>
     ) => {
+      if (process.env.AGENT_DEBUG_RAW === "1") {
+        const respPreview =
+          typeof h.tool_response === "object"
+            ? JSON.stringify(h.tool_response).slice(0, 300)
+            : String(h.tool_response).slice(0, 300);
+        process.stderr.write(
+          `[transport] PostToolUse: tool=${String(h.tool_name)} id=${String(h.tool_use_id)} response=${respPreview}\n`
+        );
+      }
       if (h.hook_event_name !== "PostToolUse") {
         return Promise.resolve({});
       }
@@ -110,7 +178,7 @@ export const createAnthropicTransport = (
       toolCalls.push({
         tool: start?.tool ?? stripMcpPrefix(h.tool_name as string),
         input: start?.input ?? h.tool_input,
-        output: h.tool_response,
+        output: unwrapMcpToolResponse(h.tool_response),
         latencyMs,
       });
       pending.delete(id);

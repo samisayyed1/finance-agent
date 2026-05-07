@@ -18,12 +18,27 @@ import { type ToolHandlerCtx, tools } from "./tools";
 export const buildMcpServerForOrg = (ctx: ToolHandlerCtx): McpServer => {
   const server = new McpServer({ name: "ai-cfo-mcp", version: "0.0.0" });
   for (const [name, tool] of Object.entries(tools)) {
+    // MCP's registerTool wants a Zod RAW SHAPE (a record of field name →
+    // Zod schema), not a wrapped z.object(). Pulling `.shape` off our
+    // top-level Zod object exposes the field schemas in the JSON schema
+    // the SDK advertises, so the model can fill in arguments. Without
+    // this, the MCP catalog publishes empty `properties: {}` and the
+    // model's tool calls go through with `{}` → server-side Zod parse
+    // throws "expected string, received undefined" on every required
+    // field. Day-3 shipped without this and silently broke every real
+    // run.
+    // biome-ignore lint/suspicious/noExplicitAny: MCP SDK ships its own pinned Zod and rejects our project's Zod types — the runtime shape is identical, the structural mismatch is purely TypeScript.
+    const inputSchemaShape = tool.inputSchema.shape as any;
     server.registerTool(
       name,
-      { description: tool.description },
+      { description: tool.description, inputSchema: inputSchemaShape },
       async (input: unknown) => {
         const result = await tool.handler(ctx, input);
-        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(result) },
+          ],
+        };
       }
     );
   }
@@ -53,17 +68,31 @@ export const handleMcpRequest = async (
     ) as [string, string][]
   );
 
+  // MCP's StreamableHTTPServerTransport reads `rawHeaders` (flat
+  // [key, value, key, value, ...] array, the Node http.IncomingMessage shape)
+  // not just `headers`, so populate both.
+  const rawHeaders: string[] = [];
+  for (const [k, v] of Object.entries(headers)) {
+    rawHeaders.push(k, v);
+  }
+
   const reqStream = new PassThrough();
   const req = Object.assign(reqStream, {
     method: c.req.method,
     url: c.req.url,
     headers,
+    rawHeaders,
   }) as unknown as IncomingMessage;
   reqStream.end(bodyText);
 
   const resStream = new PassThrough();
   const resHeaders: Record<string, string> = {};
   let resStatus = 200;
+  // Capture the underlying PassThrough's native `end` BEFORE we overlay our
+  // ServerResponse-shaped polyfill onto the same object. Otherwise our
+  // polyfill's `end()` calls `resStream.end()` which is now the polyfill
+  // itself — infinite recursion → RangeError on every MCP request.
+  const nativeStreamEnd = resStream.end.bind(resStream);
   const res = Object.assign(resStream, {
     writeHead(status: number, hdrs?: Record<string, string>) {
       resStatus = status;
@@ -84,7 +113,7 @@ export const handleMcpRequest = async (
       if (chunk) {
         resStream.write(chunk);
       }
-      resStream.end();
+      nativeStreamEnd();
     },
   }) as unknown as ServerResponse;
 

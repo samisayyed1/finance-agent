@@ -208,9 +208,14 @@ const main = async () => {
   }
 };
 
-main().catch((err) => {
-  process.stderr.write(
-    `smoke: FAILED ${err instanceof Error ? err.stack : err}\n`
-  );
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.stderr.write("smoke: done\n");
+    process.exit(0);
+  })
+  .catch((err) => {
+    process.stderr.write(
+      `smoke: FAILED ${err instanceof Error ? err.stack : err}\n`
+    );
+    process.exit(1);
+  });

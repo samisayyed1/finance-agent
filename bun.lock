@@ -802,6 +802,16 @@
         "typescript": "^5.9.3",
       },
     },
+    "scripts": {
+      "name": "@ai-cfo/scripts",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ai-cfo/agent": "workspace:*",
+        "@ai-cfo/database": "workspace:*",
+        "@ai-cfo/delivery": "workspace:*",
+        "@ai-cfo/reports": "workspace:*",
+      },
+    },
   },
   "overrides": {
     "parse5": "7.2.1",
@@ -864,6 +874,8 @@
     "@ai-cfo/reconcile": ["@ai-cfo/reconcile@workspace:packages/reconcile"],
 
     "@ai-cfo/reports": ["@ai-cfo/reports@workspace:packages/reports"],
+
+    "@ai-cfo/scripts": ["@ai-cfo/scripts@workspace:scripts"],
 
     "@ai-cfo/security": ["@ai-cfo/security@workspace:packages/security"],
 

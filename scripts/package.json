@@ -1,0 +1,12 @@
+{
+  "name": "@ai-cfo/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ai-cfo/agent": "workspace:*",
+    "@ai-cfo/database": "workspace:*",
+    "@ai-cfo/delivery": "workspace:*",
+    "@ai-cfo/reports": "workspace:*"
+  }
+}
