@@ -35,9 +35,14 @@ comment on function public.requesting_org_id() is
 --    break the demo route, but enable RLS with deny-all so it cannot leak.
 ----------------------------------------------------------------------
 
-alter table if exists public.pages enable row level security;
-drop policy if exists pages_deny_all on public.pages;
-create policy pages_deny_all on public.pages for all to authenticated using (false) with check (false);
+do $$
+begin
+  if to_regclass('public.pages') is not null then
+    execute 'alter table public.pages enable row level security';
+    execute 'drop policy if exists pages_deny_all on public.pages';
+    execute 'create policy pages_deny_all on public.pages for all to authenticated using (false) with check (false)';
+  end if;
+end$$;
 -- TODO: add `org_id uuid` column and replace deny-all with org-scoped policy when `pages` is repurposed.
 
 ----------------------------------------------------------------------
