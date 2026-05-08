@@ -64,6 +64,7 @@ const validTrace = {
   snapshot_ids: new Set(["snap-1"]),
   anomaly_ids: new Set<string>(),
   flag_ids: new Set(["MISSING_PAY_abc"]),
+  memory_ids: new Set<string>(),
 };
 
 describe("validateGrounding", () => {

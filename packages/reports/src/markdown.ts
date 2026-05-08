@@ -12,7 +12,10 @@ const citationLabel = (c: Citation): string => {
   if (c.kind === "anomaly") {
     return `anomaly ${c.anomaly_id}`;
   }
-  return `flag ${c.flag_id}`;
+  if (c.kind === "flag") {
+    return `flag ${c.flag_id}`;
+  }
+  return `memory ${c.memory_id}`;
 };
 
 const citationId = (c: Citation): string => {
@@ -22,7 +25,10 @@ const citationId = (c: Citation): string => {
   if (c.kind === "anomaly") {
     return c.anomaly_id;
   }
-  return c.flag_id;
+  if (c.kind === "flag") {
+    return c.flag_id;
+  }
+  return c.memory_id;
 };
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: end-to-end markdown emitter — splitting per-section helpers loses the reading order

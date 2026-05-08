@@ -35,9 +35,7 @@ export const buildMcpServerForOrg = (ctx: ToolHandlerCtx): McpServer => {
       async (input: unknown) => {
         const result = await tool.handler(ctx, input);
         return {
-          content: [
-            { type: "text" as const, text: JSON.stringify(result) },
-          ],
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
         };
       }
     );

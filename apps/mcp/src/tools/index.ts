@@ -28,6 +28,7 @@ import {
   reconciliationFlags,
   syncRuns,
 } from "@ai-cfo/database";
+import { MemoryKindSchema, retrieveMemories } from "@ai-cfo/memory";
 import { z } from "zod";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -78,6 +79,13 @@ export const recordFeedbackInput = z.object({
   message: z.string().optional(),
   channel: z.enum(["slack", "email", "dashboard", "whatsapp"]),
   operator_user_id: z.string().optional(),
+});
+
+export const getRelevantMemoriesInput = z.object({
+  query: z.string().min(1),
+  k: z.number().int().min(1).max(20).optional(),
+  asOf: z.string().datetime().optional(),
+  kinds: z.array(MemoryKindSchema).optional(),
 });
 
 // --- Handlers ---
@@ -291,6 +299,29 @@ const handleRecordFeedback = async (
   return { ok: true as const, id: inserted[0]?.id };
 };
 
+const handleGetRelevantMemories = async (
+  orgId: string,
+  input: z.infer<typeof getRelevantMemoriesInput>
+) => {
+  const memories = await retrieveMemories({
+    orgId,
+    query: input.query,
+    k: input.k ?? 5,
+    asOf: input.asOf ? new Date(input.asOf) : undefined,
+    kinds: input.kinds,
+  });
+  return memories.map((m) => ({
+    memory_id: m.memoryId,
+    kind: m.kind,
+    content: m.content,
+    valid_from: m.validFrom.toISOString(),
+    valid_until: m.validUntil ? m.validUntil.toISOString() : null,
+    confidence: m.confidence,
+    similarity: m.similarity ?? null,
+    source_trace_id: m.sourceTraceId,
+  }));
+};
+
 // --- Tool catalog (used by the MCP bridge in apps/mcp/src/hono-bridge.ts) ---
 
 export interface ToolHandlerCtx {
@@ -342,6 +373,16 @@ export const tools = {
     inputSchema: recordFeedbackInput,
     handler: (ctx: ToolHandlerCtx, input: unknown) =>
       handleRecordFeedback(ctx.orgId, recordFeedbackInput.parse(input)),
+  },
+  get_relevant_memories: {
+    description:
+      "Retrieve the top-k most relevant agent memories for the requesting org, ranked by cosine similarity. Each memory's `memory_id` is a valid citation token — cite it in narrative as [memory:<memory_id>] when the memory shaped a recommendation or explanation.",
+    inputSchema: getRelevantMemoriesInput,
+    handler: (ctx: ToolHandlerCtx, input: unknown) =>
+      handleGetRelevantMemories(
+        ctx.orgId,
+        getRelevantMemoriesInput.parse(input)
+      ),
   },
 } as const;
 

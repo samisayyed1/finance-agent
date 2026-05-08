@@ -18,9 +18,13 @@ import postgres from "postgres";
 import { keys } from "../keys";
 import {
   agentFeedback,
+  agentMemories,
   agentOutcomes,
   agentTraces,
+  closedLoopMetrics,
+  orgEvalSet,
   orgSettings,
+  orgThresholds,
   reports,
 } from "./schema/closed-loop";
 import { dataConnections, rawPayloads, syncRuns } from "./schema/connections";
@@ -52,7 +56,11 @@ export const schema = {
   reconciliationFlags,
   agentTraces,
   agentFeedback,
+  agentMemories,
   agentOutcomes,
+  closedLoopMetrics,
+  orgEvalSet,
+  orgThresholds,
   reports,
   orgSettings,
 };
