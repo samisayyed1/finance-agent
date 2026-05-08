@@ -308,3 +308,41 @@ export class GroundingValidationError extends Error {
     this.errors = errors;
   }
 }
+
+/**
+ * Lightweight grounding pass for free-form chat output.
+ *
+ * Day-7: the /analyst chat endpoint is conversational, not a published
+ * artifact, so we don't reject ungrounded prose — we just emit a stderr
+ * warning so the per-org grounding-rate KPI can still detect drift.
+ *
+ * The check is the same numeric-token-then-citation walk the strict
+ * validator does, run against a synthetic prose blob containing just
+ * the assistant's reply text. Returns the list of un-cited tokens
+ * found; an empty array means the reply was fully grounded.
+ */
+export const validateChatGroundingLight = (
+  text: string,
+  trace: AgentTrace
+): { issues: GroundingError[] } => {
+  const fakeField: ProseField = { field: "chat.reply", text };
+  const scan = scanField(fakeField);
+  const issues: GroundingError[] = [...scan.errors];
+  for (const c of scan.citedIds) {
+    const set = traceSetFor(c.kind, trace);
+    if (!set.has(c.id)) {
+      issues.push({
+        kind: "citation_not_in_trace",
+        field: "chat.reply",
+        citationKind: c.kind,
+        id: c.id,
+      });
+    }
+  }
+  if (issues.length > 0 && process.env.AGENT_DEBUG_RAW === "1") {
+    process.stderr.write(
+      `agent.chat: lightweight grounding flagged ${issues.length} issue${issues.length === 1 ? "" : "s"}: ${JSON.stringify(issues)}\n`
+    );
+  }
+  return { issues };
+};

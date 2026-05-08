@@ -22,6 +22,7 @@ import { agentTraces, database } from "@ai-cfo/database";
 import { type DailyReport, DailyReportSchema } from "../contracts/daily-report";
 import {
   GroundingValidationError,
+  validateChatGroundingLight,
   validateGrounding,
 } from "../grounding/validator";
 import { TraceBuffer } from "./trace-buffer";
@@ -88,6 +89,28 @@ export interface RetrievedMemoryView {
 
 export interface RunResult {
   report: DailyReport;
+  traceId: string;
+}
+
+export interface ChatMessage {
+  content: string;
+  role: "user" | "assistant";
+}
+
+export interface ChatInput {
+  messages: ChatMessage[];
+}
+
+export interface ChatCitations {
+  anomaly_ids: string[];
+  flag_ids: string[];
+  memory_ids: string[];
+  snapshot_ids: string[];
+}
+
+export interface ChatResult {
+  citations: ChatCitations;
+  message: string;
   traceId: string;
 }
 
@@ -404,6 +427,82 @@ If \`get_reconciliation_flags\` returns any flag with \`kind = 'ATTRIBUTION_MISM
 
 EMIT ONLY THE JSON OBJECT. No prose before or after. No code fences.`;
 
+const EMPTY_CITATIONS = (): ChatCitations => ({
+  anomaly_ids: [],
+  flag_ids: [],
+  memory_ids: [],
+  snapshot_ids: [],
+});
+
+const POLITE_EMPTY_REPLY =
+  "What would you like to know? I can pull metrics, flags, anomalies, or sync health for any date you have data for.";
+
+const DEGRADED_REPLY =
+  "I couldn't reach the data layer just now. Try again in a moment, or check the Connections page if this persists.";
+
+const packTranscript = (messages: ChatMessage[]): string =>
+  messages
+    .map(
+      (m) => `${m.role === "user" ? "Operator" : "CFO"}: ${m.content.trim()}`
+    )
+    .join("\n\n");
+
+const persistChatTrace = async (args: {
+  orgId: string;
+  traceId: string;
+  messages: ChatMessage[];
+  result: ChatResult;
+  latencyMs: number;
+  inputTokens: number | undefined;
+  outputTokens: number | undefined;
+  model: string;
+}): Promise<void> => {
+  try {
+    await database.insert(agentTraces).values({
+      orgId: args.orgId,
+      traceId: args.traceId,
+      tool: "chat",
+      inputJsonb: { messages: args.messages },
+      outputJsonb: { message: args.result.message },
+      latencyMs: args.latencyMs,
+      inputTokens: args.inputTokens ?? null,
+      outputTokens: args.outputTokens ?? null,
+      snapshotIds: args.result.citations.snapshot_ids,
+      anomalyIds: args.result.citations.anomaly_ids,
+      flagIds: args.result.citations.flag_ids,
+      memoryIds: args.result.citations.memory_ids,
+      model: args.model,
+      promptVersion: "chat-v1",
+    });
+  } catch (e) {
+    process.stderr.write(
+      `agent.chat: trace persist failed: ${e instanceof Error ? e.message : String(e)}\n`
+    );
+  }
+};
+
+// chat-v1 — free-form Q&A system prompt for the /analyst surface. Much
+// terser than daily-report-v1: no schema, no required actions array.
+// Iron rules echo: still must cite every numeric or percentage claim
+// with [snapshot:..]/[flag:..]/[anomaly:..]/[memory:..]; still must
+// admit when something is out of scope (no fabrication).
+const EMBEDDED_CHAT_V1_TEMPLATE = `You are the operating CFO for {{ORG_NAME}}. The operator is asking a question — answer in plain English, terse, no padding.
+
+# Iron rules
+- Every monetary or percentage token in your reply MUST carry an inline citation marker: \`[snapshot:<id>]\`, \`[flag:<id>]\`, \`[anomaly:<id>]\`, or \`[memory:<id>]\`. Use only ids returned by the tools you call (or memory ids delivered at run-start).
+- If the question can't be answered from the data you have access to, say so plainly. Do NOT fabricate numbers.
+- You may use these MCP tools: get_daily_snapshot, get_metric_history, list_anomalies, get_reconciliation_flags, get_sync_health.
+- Recommend, never execute. No automated changes.
+- Keep answers under 6 sentences unless the question demands more. Operator attention is scarce.
+
+# Connected sources
+{{CONNECTED_SOURCES}}
+
+# Things I have learned about this brand
+{{MEMORIES}}
+
+Today's date is {{REPORT_DATE}}. Org id: {{ORG_ID}}.`;
+
 export const createAgent = (
   opts: CreateAgentOptions,
   deps: AgentDeps = { promptTemplate: defaultPromptTemplate() }
@@ -502,5 +601,113 @@ export const createAgent = (
     return { report, traceId };
   };
 
-  return { run };
+  const buildChatSystemPrompt = async (
+    asOf: Date,
+    buffer: TraceBuffer
+  ): Promise<string> => {
+    const retrievedMemories = await loadMemoriesForRun({
+      memoryProvider,
+      orgId,
+      orgName,
+      asOf,
+    });
+    for (const m of retrievedMemories) {
+      buffer.memory_ids.add(m.memoryId);
+    }
+    const memoriesBlob =
+      retrievedMemories.length > 0
+        ? renderMemoriesAsBullets(retrievedMemories)
+        : staticMemoriesBlob;
+    return buildSystemPrompt({
+      template: EMBEDDED_CHAT_V1_TEMPLATE,
+      orgId,
+      orgName,
+      connectedSources: opts.toolDescriptors.length
+        ? opts.toolDescriptors.map((t) => `- ${t.name}`).join("\n")
+        : "(none)",
+      memories: memoriesBlob,
+      reportDate: ISO_DATE(asOf),
+    });
+  };
+
+  const chat = async (input: ChatInput): Promise<ChatResult> => {
+    const asOf = now();
+    const traceId = `trace_chat_${ISO_DATE(asOf)}_${randomUUID()}`;
+    const buffer = new TraceBuffer(traceId);
+    const startedAt = asOf;
+
+    const systemPrompt = await buildChatSystemPrompt(asOf, buffer);
+
+    if (input.messages.length === 0) {
+      return {
+        citations: EMPTY_CITATIONS(),
+        message: POLITE_EMPTY_REPLY,
+        traceId,
+      };
+    }
+
+    let transportOutput: Awaited<ReturnType<typeof opts.transport>>;
+    try {
+      transportOutput = await opts.transport({
+        systemPrompt,
+        userMessage: packTranscript(input.messages),
+        tools: opts.toolDescriptors,
+        invokeTool: opts.invokeTool,
+        model,
+      });
+    } catch (err) {
+      process.stderr.write(
+        `agent.chat: transport failed: ${err instanceof Error ? err.message : String(err)}\n`
+      );
+      return {
+        citations: EMPTY_CITATIONS(),
+        message: DEGRADED_REPLY,
+        traceId,
+      };
+    }
+
+    for (const call of transportOutput.toolCalls) {
+      buffer.recordInvocation({
+        tool: call.tool,
+        input: call.input,
+        output: call.output,
+        latency_ms: call.latencyMs,
+      });
+    }
+
+    validateChatGroundingLight(transportOutput.finalMessage, {
+      snapshot_ids: buffer.snapshot_ids,
+      anomaly_ids: buffer.anomaly_ids,
+      flag_ids: buffer.flag_ids,
+      memory_ids: buffer.memory_ids,
+    });
+
+    const result: ChatResult = {
+      citations: {
+        anomaly_ids: Array.from(buffer.anomaly_ids),
+        flag_ids: Array.from(buffer.flag_ids),
+        memory_ids: Array.from(buffer.memory_ids),
+        snapshot_ids: Array.from(buffer.snapshot_ids),
+      },
+      message: transportOutput.finalMessage,
+      traceId,
+    };
+
+    if (persistTrace) {
+      await persistChatTrace({
+        orgId,
+        traceId,
+        messages: input.messages,
+        result,
+        latencyMs: now().getTime() - startedAt.getTime(),
+        inputTokens: transportOutput.inputTokens,
+        outputTokens: transportOutput.outputTokens,
+        model,
+      });
+    }
+
+    return result;
+  };
+
+  return { chat, run };
 };
