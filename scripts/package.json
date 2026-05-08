@@ -3,10 +3,31 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "test": "NODE_ENV=test vitest run",
+    "seed:demo": "bun run seed-demo-org.ts"
+  },
   "dependencies": {
     "@ai-cfo/agent": "workspace:*",
+    "@ai-cfo/anomaly": "workspace:*",
+    "@ai-cfo/connector-shopify": "workspace:*",
     "@ai-cfo/database": "workspace:*",
     "@ai-cfo/delivery": "workspace:*",
-    "@ai-cfo/reports": "workspace:*"
+    "@ai-cfo/metrics": "workspace:*",
+    "@ai-cfo/reconcile": "workspace:*",
+    "@ai-cfo/reports": "workspace:*",
+    "@types/seedrandom": "3.0.8",
+    "dinero.js": "2.0.0-alpha.14",
+    "pino": "10.3.1",
+    "seedrandom": "3.0.5",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ai-cfo/typescript-config": "workspace:*",
+    "@types/node": "25.3.5",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18"
   }
 }
