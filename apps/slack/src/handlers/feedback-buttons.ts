@@ -1,5 +1,6 @@
 import { database, sql } from "@ai-cfo/database";
 import { recordFeedback } from "@ai-cfo/feedback";
+import { writeMemory } from "@ai-cfo/memory";
 import type { App } from "@slack/bolt";
 import { logger } from "../logger";
 
@@ -16,6 +17,53 @@ import { logger } from "../logger";
  */
 const FEEDBACK_ACTION_RE =
   /^feedback_(?<signal>positive|negative|correction)_(?<traceId>.+)$/;
+
+const maybeWriteMemoryFromFeedback = async (args: {
+  orgId: string;
+  traceId: string;
+  signal: "positive" | "negative" | "correction";
+  operatorText: string;
+}): Promise<void> => {
+  if (args.signal === "positive" || args.operatorText.length === 0) {
+    return;
+  }
+  const kind = args.signal === "correction" ? "correction" : "preference";
+  try {
+    await writeMemory({
+      orgId: args.orgId,
+      kind,
+      content:
+        `From operator on trace ${args.traceId}: ${args.operatorText}`.slice(
+          0,
+          2000
+        ),
+      sourceTraceId: args.traceId,
+      confidence: 0.85,
+    });
+  } catch (err) {
+    logger.warn(
+      { err, orgId: args.orgId, traceId: args.traceId, signal: args.signal },
+      "feedback: writeMemory failed (continuing)"
+    );
+  }
+};
+
+const extractOperatorText = (body: unknown): string => {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    !("message" in body) ||
+    typeof (body as { message?: unknown }).message !== "object" ||
+    !(body as { message?: unknown }).message
+  ) {
+    return "";
+  }
+  const msg = (body as { message: { text?: unknown } }).message;
+  if (typeof msg.text !== "string") {
+    return "";
+  }
+  return msg.text.trim();
+};
 
 const resolveOrgIdFromTeamId = async (
   teamId: string
@@ -70,6 +118,14 @@ export const registerFeedbackButtons = (app: App) => {
       return;
     }
 
+    // Slack delivers some interactive payloads with a text snippet (e.g.
+    // when the user threads a reply-then-clicks-button shortcut). When
+    // present and the signal is operator-driven (negative or correction),
+    // write a memory immediately — the daily distillation cron will
+    // consolidate, but Day-4 doesn't make the operator wait 24h to see
+    // their feedback shape tomorrow's report.
+    const operatorText = extractOperatorText(body);
+
     try {
       await recordFeedback({
         orgId,
@@ -77,6 +133,12 @@ export const registerFeedbackButtons = (app: App) => {
         signal,
         channel: "slack",
         operatorUserId: body.user.id,
+      });
+      await maybeWriteMemoryFromFeedback({
+        orgId,
+        traceId,
+        signal,
+        operatorText,
       });
     } catch (err) {
       logger.error(

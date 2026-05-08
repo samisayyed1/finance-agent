@@ -1,6 +1,13 @@
 # ADR 0012 — Zep + Graphiti for temporal knowledge-graph memory
 
 ## Status
+Superseded-in-day-4 — 2026-05-08
+
+> **Update (2026-05-08):** Day 4 ships the memory layer on **native Postgres + pgvector** instead of Zep+Graphiti. Rationale: (a) the schema (`vector(1536)` + HNSW + temporal `valid_from`/`valid_until` columns) was already in the Day-0 migration, (b) RLS isolation natively enforces the per-org moat boundary at Postgres, (c) zero new external dependencies — Supabase is already operated. Zep + Graphiti remain a candidate for **Day 8+** if temporal entity-relation reasoning across many sources becomes the bottleneck. Defer until measured need: if `feature_recall` plateaus despite memory volume, or if multi-source contradictions accumulate, revisit. The Day-0 description below is preserved for archaeology.
+
+---
+
+## Status (original)
 Accepted — 2026-05-07
 
 ## Context

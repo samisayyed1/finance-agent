@@ -17,6 +17,7 @@ export class TraceBuffer {
   readonly snapshot_ids = new Set<string>();
   readonly anomaly_ids = new Set<string>();
   readonly flag_ids = new Set<string>();
+  readonly memory_ids = new Set<string>();
   readonly invocations: ToolInvocation[] = [];
 
   constructor(traceId: string) {
@@ -56,6 +57,8 @@ export class TraceBuffer {
           this.anomaly_ids.add(v);
         } else if (key === "flag_id" && typeof v === "string") {
           this.flag_ids.add(v);
+        } else if (key === "memory_id" && typeof v === "string") {
+          this.memory_ids.add(v);
         } else {
           this.harvestIds(v);
         }

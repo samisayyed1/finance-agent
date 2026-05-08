@@ -34,8 +34,24 @@ export interface CreateAgentOptions {
    * to the MCP client. Tests: dispatches to in-memory fakes.
    */
   invokeTool: (toolName: string, input: unknown) => Promise<unknown>;
-  /** Memories blob to inject into the system prompt. Day-3 stub: "". */
+  /**
+   * Static memories blob, rendered as-is into the {{MEMORIES}} placeholder.
+   * Tests/legacy callers; production sets `memoryProvider` instead so the
+   * agent pulls per-run, per-asOf memories from packages/memory.
+   */
   memories?: string;
+  /**
+   * Per-run memory hook. Called at the top of agent.run() with
+   * `{orgId, query, asOf}`; the returned memories are formatted as a
+   * markdown bullet list and injected into the system prompt's
+   * {{MEMORIES}} placeholder. Returning [] is fine — the runtime falls
+   * back to "(none yet — first 30 days of new brand)." per the prompt.
+   */
+  memoryProvider?: (args: {
+    orgId: string;
+    query: string;
+    asOf: Date;
+  }) => Promise<RetrievedMemoryView[]>;
   model?: string;
   /** Override Date.now for deterministic tests. */
   now?: () => Date;
@@ -56,6 +72,18 @@ export interface CreateAgentOptions {
 
 export interface RunInput {
   date: Date;
+}
+
+/**
+ * Minimal view of an agent_memories row needed by the prompt renderer.
+ * Mirrors `Memory` from @ai-cfo/memory, kept as a structural interface
+ * so packages/agent doesn't have to depend on packages/memory.
+ */
+export interface RetrievedMemoryView {
+  confidence: number | null;
+  content: string;
+  kind: string;
+  memoryId: string;
 }
 
 export interface RunResult {
@@ -85,6 +113,93 @@ const buildSystemPrompt = (args: {
 
 const FENCE_OPEN_RE = /^```(json)?\s*/;
 const FENCE_CLOSE_RE = /```\s*$/;
+
+const debugWrite = (msg: string): void => {
+  if (process.env.AGENT_DEBUG_RAW === "1") {
+    process.stderr.write(msg);
+  }
+};
+
+const parseAndValidate = (args: {
+  finalMessage: string;
+  buffer: TraceBuffer;
+  meta: {
+    model: string;
+    promptVersion: string;
+    generatedAt: string;
+    traceId: string;
+  };
+}): DailyReport => {
+  debugWrite(
+    `[agent.run] raw final message:\n${args.finalMessage}\n[agent.run] end raw\n`
+  );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripCodeFences(args.finalMessage));
+  } catch (e) {
+    throw new Error(
+      `agent.run: final message is not valid JSON: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+  injectMetadata(parsed, args.meta);
+  const report = DailyReportSchema.parse(parsed);
+  const groundingResult = validateGrounding(report, {
+    snapshot_ids: args.buffer.snapshot_ids,
+    anomaly_ids: args.buffer.anomaly_ids,
+    flag_ids: args.buffer.flag_ids,
+    memory_ids: args.buffer.memory_ids,
+  });
+  if (!groundingResult.ok) {
+    debugWrite(
+      `[agent.run] grounding errors:\n${JSON.stringify(groundingResult.errors, null, 2)}\n[agent.run] trace ids: snapshot=${JSON.stringify(Array.from(args.buffer.snapshot_ids))} anomaly=${JSON.stringify(Array.from(args.buffer.anomaly_ids))} flag=${JSON.stringify(Array.from(args.buffer.flag_ids))} memory=${JSON.stringify(Array.from(args.buffer.memory_ids))}\n`
+    );
+    throw new GroundingValidationError(groundingResult.errors);
+  }
+  return report;
+};
+
+const loadMemoriesForRun = async (args: {
+  memoryProvider:
+    | undefined
+    | ((args: {
+        orgId: string;
+        query: string;
+        asOf: Date;
+      }) => Promise<RetrievedMemoryView[]>);
+  orgId: string;
+  orgName: string;
+  asOf: Date;
+}): Promise<RetrievedMemoryView[]> => {
+  if (!args.memoryProvider) {
+    return [];
+  }
+  try {
+    return await args.memoryProvider({
+      orgId: args.orgId,
+      query: `Daily report for ${args.orgName} on ${ISO_DATE(args.asOf)}. Patterns, preferences, corrections, vendor quirks, threshold overrides relevant to this date.`,
+      asOf: args.asOf,
+    });
+  } catch (err) {
+    process.stderr.write(
+      `agent.run: memoryProvider failed (continuing with no memories): ${err instanceof Error ? err.message : String(err)}\n`
+    );
+    return [];
+  }
+};
+
+const renderMemoriesAsBullets = (
+  memories: readonly RetrievedMemoryView[]
+): string => {
+  return memories
+    .map((m) => {
+      const conf =
+        m.confidence === null || m.confidence === undefined
+          ? ""
+          : ` (confidence ${m.confidence.toFixed(2)})`;
+      return `- [${m.kind}] ${m.content}${conf} [memory:${m.memoryId}]`;
+    })
+    .join("\n");
+};
 
 const stripCodeFences = (s: string): string => {
   const trimmed = s.trim();
@@ -126,6 +241,7 @@ const persistAgentTrace = async (args: {
       snapshotIds: Array.from(args.buffer.snapshot_ids),
       anomalyIds: Array.from(args.buffer.anomaly_ids),
       flagIds: Array.from(args.buffer.flag_ids),
+      memoryIds: Array.from(args.buffer.memory_ids),
       model: args.model,
       promptVersion: args.promptVersion,
     });
@@ -170,7 +286,7 @@ const defaultPromptTemplate = (): string => {
 const EMBEDDED_DAILY_REPORT_V1_TEMPLATE = `You are the operating CFO for {{ORG_NAME}}. The database is truth. You never compute numbers — you call MCP tools and explain what they mean.
 
 # Iron rules — non-negotiable
-1. Every monetary or percentage token in your output MUST carry an inline citation marker \`[snapshot:<id>]\`, \`[anomaly:<id>]\`, or \`[flag:<id>]\` from a tool you actually called. The grounding validator rejects the output otherwise. The user never sees ungrounded reports.
+1. Every monetary or percentage token in your output MUST carry an inline citation marker \`[snapshot:<id>]\`, \`[anomaly:<id>]\`, \`[flag:<id>]\`, or \`[memory:<id>]\` from a tool you actually called or a memory delivered at run-start. The grounding validator rejects the output otherwise. The user never sees ungrounded reports.
 2. Recommend, never execute. The \`actions\` array carries titles + reasoning + irreversibility; humans approve the irreversible ones.
 3. The output must be a single JSON object matching the DailyReport schema below. No prose outside the JSON. Do NOT wrap the JSON in markdown code fences.
 
@@ -179,6 +295,11 @@ const EMBEDDED_DAILY_REPORT_V1_TEMPLATE = `You are the operating CFO for {{ORG_N
 
 # Things I have learned about this brand
 {{MEMORIES}}
+
+When generating top_movers / flags / actions, factor these memories in:
+- If a memory marks a pattern as normal (e.g. "Sunday drops 12% — Sabbath observance"), do NOT flag it as anomalous in the report.
+- If a memory states an operator preference, honor it in the actions section (and cite it via [memory:<id>] in the action's reasoning).
+- If a memory contains a vendor quirk, reflect it in narrative rather than flagging it.
 
 # Today's task
 Produce a complete DailyReport for the date \`{{REPORT_DATE}}\` (org-local timezone). Use these MCP tools to read truth:
@@ -198,7 +319,8 @@ The exact runtime schema lives at \`packages/agent/src/contracts/daily-report.ts
 type Citation =
   | { kind: 'snapshot'; snapshot_id: string }
   | { kind: 'anomaly';  anomaly_id:  string }
-  | { kind: 'flag';     flag_id:     string };
+  | { kind: 'flag';     flag_id:     string }
+  | { kind: 'memory';   memory_id:   string };
 
 type Severity = 'low' | 'medium' | 'high';
 
@@ -276,7 +398,8 @@ export const createAgent = (
   const orgName = opts.orgName ?? "your business";
   const model = opts.model ?? DEFAULT_MODEL;
   const promptVersion = opts.promptVersion ?? DEFAULT_PROMPT_VERSION;
-  const memories = opts.memories ?? "";
+  const staticMemoriesBlob = opts.memories ?? "";
+  const memoryProvider = opts.memoryProvider;
   const persistTrace = opts.persistTrace ?? true;
   const now = opts.now ?? (() => new Date());
 
@@ -285,6 +408,25 @@ export const createAgent = (
     const buffer = new TraceBuffer(traceId);
     const startedAt = now();
 
+    // Pull per-run memories from the provider (production wiring), or fall
+    // back to the static blob (tests / cold-start orgs). Memory ids are
+    // pre-seeded into the trace buffer so the model can cite them via
+    // [memory:<id>] markers — the grounding validator won't accept a
+    // memory citation that wasn't returned at run-start.
+    const retrievedMemories = await loadMemoriesForRun({
+      memoryProvider,
+      orgId,
+      orgName,
+      asOf: input.date,
+    });
+    for (const m of retrievedMemories) {
+      buffer.memory_ids.add(m.memoryId);
+    }
+    const memoriesBlob =
+      retrievedMemories.length > 0
+        ? renderMemoriesAsBullets(retrievedMemories)
+        : staticMemoriesBlob;
+
     const systemPrompt = buildSystemPrompt({
       template: deps.promptTemplate,
       orgId,
@@ -292,7 +434,7 @@ export const createAgent = (
       connectedSources: opts.toolDescriptors.length
         ? opts.toolDescriptors.map((t) => `- ${t.name}`).join("\n")
         : "(none)",
-      memories,
+      memories: memoriesBlob,
       reportDate: ISO_DATE(input.date),
     });
 
@@ -317,54 +459,16 @@ export const createAgent = (
       });
     }
 
-    // Parse final message → DailyReport. Strip optional fences for
-    // model-induced markdown wrapping.
-    if (process.env.AGENT_DEBUG_RAW === "1") {
-      process.stderr.write(
-        `[agent.run] raw final message:\n${transportOutput.finalMessage}\n[agent.run] end raw\n`
-      );
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripCodeFences(transportOutput.finalMessage));
-    } catch (e) {
-      throw new Error(
-        `agent.run: final message is not valid JSON: ${
-          e instanceof Error ? e.message : String(e)
-        }`
-      );
-    }
-
-    // Inject runtime metadata before schema validation so the model doesn't
-    // have to know its own trace_id ahead of time.
-    injectMetadata(parsed, {
-      model,
-      promptVersion,
-      generatedAt: now().toISOString(),
-      traceId,
+    const report = parseAndValidate({
+      finalMessage: transportOutput.finalMessage,
+      buffer,
+      meta: {
+        model,
+        promptVersion,
+        generatedAt: now().toISOString(),
+        traceId,
+      },
     });
-
-    if (process.env.AGENT_DEBUG_RAW === "1") {
-      process.stderr.write(
-        `[agent.run] raw final message:\n${transportOutput.finalMessage}\n[agent.run] end raw\n`
-      );
-    }
-    const report = DailyReportSchema.parse(parsed);
-
-    const groundingResult = validateGrounding(report, {
-      snapshot_ids: buffer.snapshot_ids,
-      anomaly_ids: buffer.anomaly_ids,
-      flag_ids: buffer.flag_ids,
-    });
-    if (!groundingResult.ok) {
-      if (process.env.AGENT_DEBUG_RAW === "1") {
-        process.stderr.write(
-          `[agent.run] grounding errors:\n${JSON.stringify(groundingResult.errors, null, 2)}\n` +
-            `[agent.run] trace ids: snapshot=${JSON.stringify(Array.from(buffer.snapshot_ids))} anomaly=${JSON.stringify(Array.from(buffer.anomaly_ids))} flag=${JSON.stringify(Array.from(buffer.flag_ids))}\n`
-        );
-      }
-      throw new GroundingValidationError(groundingResult.errors);
-    }
 
     if (persistTrace) {
       await persistAgentTrace({

@@ -8,6 +8,7 @@ export {
   FlagCitation,
   FlagSummary,
   Headline,
+  MemoryCitation,
   ReconciliationFlagKind,
   ReportMetadata,
   Severity,
@@ -25,6 +26,7 @@ export {
 export {
   type CreateAgentOptions,
   createAgent,
+  type RetrievedMemoryView,
   type RunInput,
   type RunResult,
 } from "./runtime/agent";

@@ -14,16 +14,19 @@ import type { DailyReport } from "../contracts/daily-report";
 export interface AgentTrace {
   anomaly_ids: ReadonlySet<string>;
   flag_ids: ReadonlySet<string>;
+  memory_ids: ReadonlySet<string>;
   /** Set of snapshot_ids returned by tool calls during the run. */
   snapshot_ids: ReadonlySet<string>;
 }
+
+export type CitationKind = "snapshot" | "anomaly" | "flag" | "memory";
 
 export type GroundingError =
   | { kind: "missing_inline_citation"; field: string; token: string }
   | {
       kind: "citation_not_in_trace";
       field: string;
-      citationKind: "snapshot" | "anomaly" | "flag";
+      citationKind: CitationKind;
       id: string;
     }
   | {
@@ -54,7 +57,7 @@ const NUMERIC_TOKEN_RE = /-?\$?\(?\d[\d,]*(\.\d+)?\)?%?/g;
  * after the token.
  */
 const CITATION_MARKER_RE =
-  /\[(?<kind>snapshot|anomaly|flag):(?<id>[A-Za-z0-9_:.-]+)\]/g;
+  /\[(?<kind>snapshot|anomaly|flag|memory):(?<id>[A-Za-z0-9_:.-]+)\]/g;
 
 const MAX_CITATION_DISTANCE = 80;
 
@@ -93,7 +96,7 @@ const collectProseFields = (report: DailyReport): ProseField[] => {
  * that appeared (for the trace-membership pass).
  */
 interface FieldScanResult {
-  citedIds: Array<{ kind: "snapshot" | "anomaly" | "flag"; id: string }>;
+  citedIds: Array<{ kind: CitationKind; id: string }>;
   errors: GroundingError[];
 }
 
@@ -105,14 +108,14 @@ const scanField = (field: ProseField): FieldScanResult => {
   const markers: Array<{
     start: number;
     end: number;
-    kind: "snapshot" | "anomaly" | "flag";
+    kind: CitationKind;
     id: string;
   }> = [];
   for (const m of field.text.matchAll(CITATION_MARKER_RE)) {
     if (m.index === undefined || !m.groups) {
       continue;
     }
-    const kind = m.groups.kind as "snapshot" | "anomaly" | "flag";
+    const kind = m.groups.kind as CitationKind;
     const id = m.groups.id as string;
     markers.push({
       start: m.index,
@@ -188,7 +191,7 @@ const validateAgainstTrace = (
 };
 
 const traceSetFor = (
-  kind: "snapshot" | "anomaly" | "flag",
+  kind: CitationKind,
   trace: AgentTrace
 ): ReadonlySet<string> => {
   if (kind === "snapshot") {
@@ -197,7 +200,10 @@ const traceSetFor = (
   if (kind === "anomaly") {
     return trace.anomaly_ids;
   }
-  return trace.flag_ids;
+  if (kind === "flag") {
+    return trace.flag_ids;
+  }
+  return trace.memory_ids;
 };
 
 const idFromCitation = (
@@ -205,6 +211,7 @@ const idFromCitation = (
     | { kind: "snapshot"; snapshot_id: string }
     | { kind: "anomaly"; anomaly_id: string }
     | { kind: "flag"; flag_id: string }
+    | { kind: "memory"; memory_id: string }
 ): string => {
   if (c.kind === "snapshot") {
     return c.snapshot_id;
@@ -212,7 +219,10 @@ const idFromCitation = (
   if (c.kind === "anomaly") {
     return c.anomaly_id;
   }
-  return c.flag_id;
+  if (c.kind === "flag") {
+    return c.flag_id;
+  }
+  return c.memory_id;
 };
 
 /** Validate top-level structural citations match the trace. */

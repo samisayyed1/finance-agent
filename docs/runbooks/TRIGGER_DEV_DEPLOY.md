@@ -6,11 +6,12 @@ The closed-loop jobs in `packages/learning/jobs/index.ts` declare their schedule
 
 | Job | Cron | Purpose |
 | --- | --- | --- |
-| `ai-cfo.write-memories-from-traces` | `0 1 * * *` | Mine yesterday's traces → `agent_memories` |
-| `ai-cfo.rebuild-eval-set` | `0 2 * * 0` (Sun) | Rebuild `org_eval_set` from labeled feedback |
-| `ai-cfo.tune-thresholds` | `0 3 * * 0` (Sun) | Recompute per-org z-score thresholds |
-| `ai-cfo.optimize-prompt` | manual | DSPy+GEPA prompt evolution (Day 30+) |
-| `ai-cfo.measure-closed-loop` | `0 4 * * *` | Track per-org grounding rate / feature recall / outcome accuracy |
+| `ai-cfo.daily-report-tick`            | `0 * * * *`    | Hourly fan-out to per-org daily report runs whose `org_settings.daily_report_time` matches |
+| `ai-cfo.write-memories-from-traces`   | `30 0 * * *`   | Mine yesterday's traces+feedback+outcomes → `agent_memories` (Haiku 4.5 distill) |
+| `ai-cfo.measure-closed-loop`          | `0 1 * * *`    | Per-org `closed_loop_metrics` row: grounding_rate / feature_recall / outcome_accuracy |
+| `ai-cfo.rebuild-eval-set`             | `0 2 * * 0` Sun | Rebuild `org_eval_set` fixtures from operator-flagged traces |
+| `ai-cfo.tune-thresholds`              | `30 2 * * 0` Sun| Bump `org_thresholds` for false-positive feedback |
+| `ai-cfo.optimize-prompt`              | manual         | DSPy+GEPA prompt evolution (Day 30+, ADR 0013) |
 
 ## Queue priorities
 

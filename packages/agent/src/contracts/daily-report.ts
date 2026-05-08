@@ -36,10 +36,15 @@ export const FlagCitation = z.object({
   kind: z.literal("flag"),
   flag_id: z.string().min(1),
 });
+export const MemoryCitation = z.object({
+  kind: z.literal("memory"),
+  memory_id: z.string().min(1),
+});
 export const Citation = z.discriminatedUnion("kind", [
   SnapshotCitation,
   AnomalyCitation,
   FlagCitation,
+  MemoryCitation,
 ]);
 export type Citation = z.infer<typeof Citation>;
 
