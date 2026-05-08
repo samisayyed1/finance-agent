@@ -22,9 +22,14 @@ export {
   type GroundingError,
   type GroundingResult,
   GroundingValidationError,
+  validateChatGroundingLight,
   validateGrounding,
 } from "./grounding/validator";
 export {
+  type ChatCitations,
+  type ChatInput,
+  type ChatMessage,
+  type ChatResult,
   type CreateAgentOptions,
   createAgent,
   type RetrievedMemoryView,
