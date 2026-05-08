@@ -1,4 +1,5 @@
 import {
+  adMetricsDaily,
   and,
   database,
   eq,
@@ -8,6 +9,13 @@ import {
   payments,
   reconciliationFlags,
 } from "@ai-cfo/database";
+import {
+  type AdMetricDailySummary,
+  type AdSource,
+  type AttributionMismatchResult,
+  detectAttributionMismatch,
+  type OrderForAttribution,
+} from "./attribution-match";
 import {
   type MatchOptions,
   type MatchOrder,
@@ -21,6 +29,7 @@ export interface ReconcileWindow {
 }
 
 export interface ReconcileResult {
+  attributionMismatchFlags: number;
   feeDriftFlags: number;
   matched: number;
   orderMissingPayment: number;
@@ -190,6 +199,11 @@ export const runReconciliation = async (
     }
   }
 
+  // 6. Day-6: ATTRIBUTION_MISMATCH per (date, ad_source).
+  // Iterate dates in the window in 1-day buckets so each calendar day
+  // produces at most one flag per ad source.
+  const attributionMismatchFlags = await runAttributionPass(orgId, window);
+
   return {
     ordersConsidered: orderRows.length,
     paymentsConsidered: paymentRows.length,
@@ -197,5 +211,147 @@ export const runReconciliation = async (
     orderMissingPayment: result.orphanedOrders.length,
     paymentWithoutOrder: result.orphanedPayments.length,
     feeDriftFlags,
+    attributionMismatchFlags,
   };
+};
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const yyyymmdd = (d: Date): string =>
+  `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+
+const startOfUtcDay = (d: Date): Date =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+interface OrderAttributionRow {
+  source_metadata: unknown;
+}
+
+const inferredFromOrder = (
+  row: OrderAttributionRow
+): OrderForAttribution["inferredMarketingSource"] | null => {
+  if (row.source_metadata === null || typeof row.source_metadata !== "object") {
+    return null;
+  }
+  const sm = row.source_metadata as Record<string, unknown>;
+  const attr = sm.attribution as
+    | { inferred_marketing_source?: string }
+    | undefined;
+  const v = attr?.inferred_marketing_source;
+  if (
+    v === "meta" ||
+    v === "google" ||
+    v === "tiktok" ||
+    v === "klaviyo" ||
+    v === "organic" ||
+    v === "other"
+  ) {
+    return v;
+  }
+  return null;
+};
+
+const persistAttributionMismatch = async (
+  result: AttributionMismatchResult
+): Promise<void> => {
+  const flagId = `ATTR_${result.adSource}_${yyyymmdd(result.date)}_${result.orgId.slice(0, 8)}`;
+  const reportedDecimal = result.reportedConversions.toFixed(2);
+  const observedDecimal = result.observedOrders.toFixed(2);
+  const deltaDecimal = (
+    result.reportedConversions - result.observedOrders
+  ).toFixed(2);
+  await database
+    .insert(reconciliationFlags)
+    .values({
+      orgId: result.orgId,
+      flagId,
+      kind: "ATTRIBUTION_MISMATCH",
+      expected: reportedDecimal,
+      actual: observedDecimal,
+      delta: deltaDecimal,
+      status: "open",
+    })
+    .onConflictDoUpdate({
+      target: [reconciliationFlags.flagId],
+      set: {
+        expected: reportedDecimal,
+        actual: observedDecimal,
+        delta: deltaDecimal,
+      },
+    });
+};
+
+const runAttributionPass = async (
+  orgId: string,
+  window: ReconcileWindow
+): Promise<number> => {
+  let count = 0;
+  let cursor = startOfUtcDay(window.start);
+  const end = startOfUtcDay(window.end);
+  // If window is exclusive on end, include end if it equals window.end.
+  while (cursor.getTime() <= end.getTime()) {
+    const dayStart = cursor;
+    const dayEnd = new Date(dayStart.getTime() + ONE_DAY_MS);
+
+    // Orders for this day with inferred attribution.
+    const orderRows = await database
+      .select({
+        sourceMetadata: orders.sourceMetadata,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.orgId, orgId),
+          eq(orders.source, "shopify"),
+          gte(orders.createdAtSource, dayStart),
+          lt(orders.createdAtSource, dayEnd)
+        )
+      );
+    const ordersForAttribution: OrderForAttribution[] = [];
+    for (const r of orderRows) {
+      const inferred = inferredFromOrder({
+        source_metadata: r.sourceMetadata,
+      });
+      if (inferred) {
+        ordersForAttribution.push({ inferredMarketingSource: inferred });
+      }
+    }
+
+    // Ad metrics for this day, summed per source.
+    const dateStr = dayStart.toISOString().slice(0, 10);
+    const adRows = await database
+      .select({
+        source: adMetricsDaily.source,
+        conversions: adMetricsDaily.conversions,
+      })
+      .from(adMetricsDaily)
+      .where(
+        and(eq(adMetricsDaily.orgId, orgId), eq(adMetricsDaily.date, dateStr))
+      );
+    const adMetrics: AdMetricDailySummary[] = adRows
+      .filter(
+        (r): r is { source: AdSource; conversions: string } =>
+          r.source === "meta" || r.source === "google"
+      )
+      .map((r) => ({
+        source: r.source,
+        conversions: Number(r.conversions),
+      }));
+
+    if (adMetrics.length > 0 || ordersForAttribution.length > 0) {
+      const results = detectAttributionMismatch({
+        orgId,
+        date: dayStart,
+        adMetrics,
+        orders: ordersForAttribution,
+      });
+      for (const r of results) {
+        await persistAttributionMismatch(r);
+        count++;
+      }
+    }
+
+    cursor = new Date(cursor.getTime() + ONE_DAY_MS);
+  }
+  return count;
 };

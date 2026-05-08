@@ -67,15 +67,42 @@ export const ReconciliationFlagKind = z.enum([
   "DUPLICATE_ORDER",
   "FEE_DRIFT",
   "PAYOUT_GAP",
+  "ATTRIBUTION_MISMATCH",
   "PERIOD_GAP",
 ]);
 export type ReconciliationFlagKind = z.infer<typeof ReconciliationFlagKind>;
 
 export const Severity = z.enum(["low", "medium", "high"]);
 
+// --- Canonical metric vocabulary ---
+// Day-6: tightened from `z.string()` to enum so the model can't invent
+// novel metric names (which would silently fail downstream lookups).
+export const MetricName = z.enum([
+  "revenue_gross",
+  "revenue_net",
+  "revenue_per_order",
+  "aov",
+  "orders",
+  "new_customers",
+  "refunds",
+  "refund_rate",
+  "fees",
+  "ad_spend",
+  "roas",
+  "blended_mer",
+  "cac",
+  "contribution_profit",
+  "gross_margin",
+  "conversions",
+  "conversion_value",
+  "cpc",
+  "ctr",
+]);
+export type MetricName = z.infer<typeof MetricName>;
+
 // --- Headline ---
 export const Headline = z.object({
-  metric: z.string().min(1),
+  metric: MetricName,
   value: moneyString,
   delta_pct: z.number(),
   trend: z.enum(["up", "down", "flat"]),
@@ -84,7 +111,7 @@ export const Headline = z.object({
 
 // --- Top movers ---
 export const TopMover = z.object({
-  metric: z.string().min(1),
+  metric: MetricName,
   value: moneyString,
   delta_abs: moneyString,
   delta_pct: z.number(),

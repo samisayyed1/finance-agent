@@ -9,6 +9,7 @@ export {
   FlagSummary,
   Headline,
   MemoryCitation,
+  MetricName,
   ReconciliationFlagKind,
   ReportMetadata,
   Severity,

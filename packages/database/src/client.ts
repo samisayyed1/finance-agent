@@ -28,7 +28,12 @@ import {
   orgThresholds,
   reports,
 } from "./schema/closed-loop";
-import { dataConnections, rawPayloads, syncRuns } from "./schema/connections";
+import {
+  connectionAlerts,
+  dataConnections,
+  rawPayloads,
+  syncRuns,
+} from "./schema/connections";
 import { dailyMetrics } from "./schema/metrics";
 import {
   orderLineItems,
@@ -39,13 +44,18 @@ import {
 } from "./schema/orders";
 import { organizations } from "./schema/organizations";
 import { pages } from "./schema/pages";
-import { anomalies, reconciliationFlags } from "./schema/reconciliation";
+import {
+  anomalies,
+  flagStatusHistory,
+  reconciliationFlags,
+} from "./schema/reconciliation";
 
 export const schema = {
   anomalies,
   pages,
   organizations,
   dataConnections,
+  connectionAlerts,
   syncRuns,
   rawPayloads,
   dailyMetrics,
@@ -55,6 +65,7 @@ export const schema = {
   refunds,
   payouts,
   reconciliationFlags,
+  flagStatusHistory,
   agentTraces,
   agentFeedback,
   agentMemories,

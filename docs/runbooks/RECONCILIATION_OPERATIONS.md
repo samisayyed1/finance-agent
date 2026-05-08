@@ -43,3 +43,36 @@ Day-3: bulk-resolve UI + auto-dismiss for known patterns (e.g., the merchant exp
 ## Idempotency
 
 Flag rows are upserted by `flag_id` with `ON CONFLICT DO NOTHING`. Re-running reconciliation produces zero new rows; resolving a flag in the dashboard never gets undone by a re-run. The deterministic `flag_id` shape (`MISSING_PAY_<order_id>`, `PAY_NO_ORDER_<payment_id>`, `FEE_DRIFT_<order>_<payment>`) makes this trivial.
+
+## Day-6: ATTRIBUTION_MISMATCH
+
+A new flag kind detects drift between ad-platform-reported conversions and Shopify-attributed orders for the same date.
+
+**`flag_id`:** `ATTR_<source>_<YYYYMMDD>_<orgId8>` (e.g. `ATTR_meta_20260508_d4e48133`).
+**Default thresholds:** drift ≥ 25% AND absolute delta ≥ 3 conversions. Per-org overrides via `org_thresholds` rows (Day-7+).
+**Severity:** drift 25-30% → low, 30-50% → medium, ≥ 50% → high.
+**Idempotency:** ON CONFLICT (flag_id) DO UPDATE refreshes expected/actual to the latest data; operator-side status is preserved.
+
+**Operator workflow at `/settings/reconciliation`:**
+- Per row: Resolve / Dismiss / Snooze 7d / Investigate.
+- Bulk-select for multi-day clean-up.
+- Each status change writes to `flag_status_history` (audit trail with `prev_status` → `new_status`, `changed_by`, `changed_at`, optional `notes`).
+
+**Status semantics:**
+- `open` — newly fired, not yet seen.
+- `investigating` — operator actively debugging.
+- `snoozed` — known cause (e.g. iOS 14.5 gap); reappears in 7 days if drift persists.
+- `resolved` — fix verified.
+- `dismissed` — structural drift accepted for this brand.
+
+See `docs/runbooks/ATTRIBUTION_TROUBLESHOOTING.md` for the operator-facing diagnostic playbook (Pixel double-fire, iOS 14.5+ gap, attribution windows, CDN/UTM stripping).
+
+## Day-6: token-expiry monitor
+
+`ai-cfo.connection-health` (Trigger.dev cron, daily 06:00 UTC) inspects `data_connections.expires_at` and writes to `connection_alerts`:
+
+- `expires_at` within 7 days → `kind='token_expiring'`, severity='medium'
+- `expires_at` past → `kind='token_expired'`, severity='high', `data_connections.status='expired'`
+- Org has active Slack install → bot DMs the `authed_user` with a reconnect link
+
+Today this primarily affects Meta's ~60-day long-lived token. Google Ads connections use refresh_tokens that don't expire on a clock (only when revoked), so `expires_at` stays NULL for Google rows.

@@ -6,6 +6,7 @@ import type {
   NormalizedRefund,
   ShopifyWebhookTopic,
 } from "../canonical/types";
+import { extractOrderAttribution } from "./attribution";
 import { decimalStringToMinor } from "./money";
 import {
   type ShopifyOrder,
@@ -94,7 +95,16 @@ const orderToNormalized = (
     fulfillmentStatus: order.fulfillment_status ?? null,
     createdAtSource: new Date(order.created_at),
     cancelledAtSource: order.cancelled_at ? new Date(order.cancelled_at) : null,
-    sourceMetadata: { raw: order },
+    sourceMetadata: {
+      raw: order,
+      attribution: extractOrderAttribution(
+        order as unknown as {
+          landing_site?: string | null;
+          referring_site?: string | null;
+          source_name?: string | null;
+        }
+      ),
+    },
     lineItems,
   };
 };
