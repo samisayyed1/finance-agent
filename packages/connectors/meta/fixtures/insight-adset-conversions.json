@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "campaign_id": "23857600412340000",
+      "campaign_name": "DTC – Spring Sale Prospecting",
+      "adset_id": "23857600412350000",
+      "adset_name": "Lookalike 1% – Top Buyers",
+      "objective": "OUTCOME_SALES",
+      "account_id": "act_1234567890",
+      "account_currency": "USD",
+      "spend": "127.83",
+      "impressions": "32104",
+      "clicks": "504",
+      "ctr": "1.5701",
+      "cpc": "0.2536",
+      "actions": [
+        {
+          "action_type": "purchase",
+          "value": "9",
+          "7d_click": "9",
+          "1d_view": "0"
+        },
+        {
+          "action_type": "offsite_conversion.fb_pixel_purchase",
+          "value": "9",
+          "7d_click": "9"
+        },
+        { "action_type": "add_to_cart", "value": "21" }
+      ],
+      "action_values": [
+        { "action_type": "purchase", "value": "742.16" },
+        {
+          "action_type": "offsite_conversion.fb_pixel_purchase",
+          "value": "742.16"
+        }
+      ],
+      "purchase_roas": [{ "action_type": "omni_purchase", "value": "5.8062" }],
+      "date_start": "2026-05-06",
+      "date_stop": "2026-05-06"
+    }
+  ],
+  "paging": { "cursors": {} }
+}

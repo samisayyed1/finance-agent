@@ -7,11 +7,13 @@
  */
 
 import {
+  adMetricsDaily,
   and,
   dailyMetrics,
   database,
   eq,
   gte,
+  isNotNull,
   lt,
   orders,
   payments,
@@ -23,6 +25,7 @@ import {
 } from "./compute-daily-metrics";
 
 export {
+  type AdMetricRow,
   computeDailyMetricsFromRows,
   computeShopifyDailyMetricsFromRows,
   type DailyMetricsInput,
@@ -68,6 +71,7 @@ export const computeDailyMetrics = async (
       total: orders.total,
       createdAtSource: orders.createdAtSource,
       cancelledAtSource: orders.cancelledAtSource,
+      customerEmail: orders.customerEmail,
     })
     .from(orders)
     .where(
@@ -76,6 +80,41 @@ export const computeDailyMetrics = async (
         eq(orders.source, "shopify"),
         gte(orders.createdAtSource, dayStart),
         lt(orders.createdAtSource, dayEnd)
+      )
+    );
+
+  // Day-5: build the prior-customers set with one query — every distinct
+  // customer_email this org has ever ordered with BEFORE today's window.
+  const priorEmailRows = await database
+    .selectDistinct({ email: orders.customerEmail })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.orgId, args.orgId),
+        lt(orders.createdAtSource, dayStart),
+        isNotNull(orders.customerEmail)
+      )
+    );
+  const priorCustomerEmails = new Set<string>();
+  for (const row of priorEmailRows) {
+    if (row.email) {
+      priorCustomerEmails.add(row.email);
+    }
+  }
+
+  const adMetricsForDate = await database
+    .select({
+      source: adMetricsDaily.source,
+      currency: adMetricsDaily.currency,
+      spend: adMetricsDaily.spend,
+      conversions: adMetricsDaily.conversions,
+      conversionValue: adMetricsDaily.conversionValue,
+    })
+    .from(adMetricsDaily)
+    .where(
+      and(
+        eq(adMetricsDaily.orgId, args.orgId),
+        eq(adMetricsDaily.date, args.date.toISOString().slice(0, 10))
       )
     );
 
@@ -119,6 +158,8 @@ export const computeDailyMetrics = async (
     ordersForDate,
     refundsForDate,
     paymentsForDate,
+    adMetricsForDate,
+    priorCustomerEmails,
   });
 
   await database
@@ -150,9 +191,15 @@ export const computeDailyMetrics = async (
         revenueNet: result.revenue_net,
         refunds: result.refunds,
         fees: result.fees,
+        adSpend: result.ad_spend,
         contributionProfit: result.contribution_profit,
+        roas: result.roas,
+        blendedMer: result.blended_mer,
+        cac: result.cac,
         aov: result.aov,
         orders: result.orders,
+        newCustomers: result.new_customers,
+        refundRate: result.refund_rate,
         computedAt: new Date(),
       },
     });

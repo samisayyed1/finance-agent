@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "campaign_id": "23857600412340000",
+      "campaign_name": "DTC – Spring Sale Prospecting",
+      "adset_id": "23857600412350000",
+      "adset_name": "Lookalike 1% – Top Buyers",
+      "ad_id": "23857600412360000",
+      "ad_name": "UGC – Sarah testimonial 30s",
+      "objective": "OUTCOME_SALES",
+      "account_id": "act_1234567890",
+      "account_currency": "USD",
+      "spend": "42.91",
+      "impressions": "11203",
+      "clicks": "189",
+      "ctr": "1.687",
+      "cpc": "0.227",
+      "actions": [
+        { "action_type": "purchase", "value": "3" },
+        { "action_type": "video_view", "value": "8132" }
+      ],
+      "action_values": [{ "action_type": "purchase", "value": "248.97" }],
+      "date_start": "2026-05-06",
+      "date_stop": "2026-05-06"
+    }
+  ],
+  "paging": { "cursors": {} }
+}

@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "id": "21034567893",
+        "name": "Display – Remarketing",
+        "status": "PAUSED",
+        "advertising_channel_type": "DISPLAY"
+      },
+      "segments": { "date": "2026-05-06" },
+      "metrics": {
+        "cost_micros": "0",
+        "impressions": "0",
+        "clicks": "0",
+        "conversions": "0",
+        "conversions_value": "0"
+      },
+      "customer": { "id": "1234567890", "currency_code": "USD" }
+    }
+  ]
+}

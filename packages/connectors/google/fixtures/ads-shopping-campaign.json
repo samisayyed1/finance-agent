@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "id": "21034567892",
+        "name": "Shopping – All Products",
+        "status": "ENABLED",
+        "advertising_channel_type": "SHOPPING"
+      },
+      "segments": { "date": "2026-05-06" },
+      "metrics": {
+        "cost_micros": "892340000",
+        "impressions": "152340",
+        "clicks": "2891",
+        "conversions": "42.0",
+        "conversions_value": "3892.10",
+        "average_cpc": "308655",
+        "ctr": "0.0190"
+      },
+      "customer": { "id": "1234567890", "currency_code": "USD" }
+    }
+  ]
+}

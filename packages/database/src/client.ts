@@ -16,6 +16,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { keys } from "../keys";
+import { adCampaigns, adMetricsDaily } from "./schema/ad-spend";
 import {
   agentFeedback,
   agentMemories,
@@ -58,6 +59,8 @@ export const schema = {
   agentFeedback,
   agentMemories,
   agentOutcomes,
+  adCampaigns,
+  adMetricsDaily,
   closedLoopMetrics,
   orgEvalSet,
   orgThresholds,
