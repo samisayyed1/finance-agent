@@ -1,0 +1,22 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "id": "21034567891",
+        "name": "Performance Max – DTC",
+        "status": "ENABLED",
+        "advertising_channel_type": "PERFORMANCE_MAX"
+      },
+      "segments": { "date": "2026-05-06" },
+      "metrics": {
+        "cost_micros": "1234560000",
+        "impressions": "98712",
+        "clicks": "1840",
+        "conversions": "57.0",
+        "conversions_value": "5421.18",
+        "average_cpc": "670956"
+      },
+      "customer": { "id": "1234567890", "currency_code": "USD" }
+    }
+  ]
+}

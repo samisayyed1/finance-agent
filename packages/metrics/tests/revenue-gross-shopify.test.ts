@@ -98,14 +98,16 @@ describe("computeShopifyDailyMetricsFromRows: 12 orders, 3 refunds", () => {
     expect(result.contribution_profit).toBe(result.revenue_net);
   });
 
-  it("explicitly nulls fields still pending other connectors (Day-2 surface)", () => {
-    expect(result.ad_spend).toBeNull();
+  it("Day-5 surface: ad_spend = 0 (no Meta/Google rows) → roas/mer/cac null, refund_rate cited from refunds/gross", () => {
+    expect(result.ad_spend).toBe("0.00");
     expect(result.gross_margin).toBeNull();
     expect(result.roas).toBeNull();
     expect(result.blended_mer).toBeNull();
     expect(result.cac).toBeNull();
-    expect(result.new_customers).toBeNull();
-    expect(result.refund_rate).toBeNull();
+    // No customer_email present in fixture orders → 0 new customers detected.
+    expect(result.new_customers).toBe(0);
+    // refund_rate = refunds_total / revenue_gross with the Day-1 fixture.
+    expect(result.refund_rate).not.toBeNull();
   });
 });
 

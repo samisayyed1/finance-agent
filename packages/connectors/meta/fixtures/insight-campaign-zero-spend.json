@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "campaign_id": "23857600412340001",
+      "campaign_name": "Paused Holiday Campaign",
+      "objective": "OUTCOME_AWARENESS",
+      "account_id": "act_1234567890",
+      "account_currency": "USD",
+      "spend": "0.00",
+      "impressions": "0",
+      "clicks": "0",
+      "date_start": "2026-05-06",
+      "date_stop": "2026-05-06"
+    }
+  ],
+  "paging": { "cursors": {} }
+}

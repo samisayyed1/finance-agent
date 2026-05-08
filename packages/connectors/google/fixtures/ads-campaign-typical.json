@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "campaign": {
+        "id": "21034567890",
+        "name": "Search – Brand Terms",
+        "status": "ENABLED",
+        "advertising_channel_type": "SEARCH"
+      },
+      "segments": { "date": "2026-05-06" },
+      "metrics": {
+        "cost_micros": "287430000",
+        "impressions": "12450",
+        "clicks": "612",
+        "conversions": "23.5",
+        "conversions_value": "1842.36",
+        "average_cpc": "469640",
+        "ctr": "0.0492"
+      },
+      "customer": { "id": "1234567890", "currency_code": "USD" }
+    }
+  ]
+}
