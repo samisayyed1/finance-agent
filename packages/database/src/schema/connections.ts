@@ -27,6 +27,7 @@ export const dataConnections = pgTable(
     }),
     lastError: text("last_error"),
     sourceMetadata: jsonb("source_metadata").notNull().default({}),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -34,11 +35,42 @@ export const dataConnections = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("data_connections_org_idx").on(t.orgId)]
+  (t) => [
+    index("data_connections_org_idx").on(t.orgId),
+    index("data_connections_expires_at_idx").on(t.expiresAt),
+  ]
 );
 
 export type DataConnection = typeof dataConnections.$inferSelect;
 export type NewDataConnection = typeof dataConnections.$inferInsert;
+
+export const connectionAlerts = pgTable(
+  "connection_alerts",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    kind: text("kind").notNull(),
+    severity: text("severity").notNull().default("medium"),
+    message: text("message"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("connection_alerts_org_open_idx").on(
+      t.orgId,
+      t.resolvedAt,
+      t.createdAt
+    ),
+  ]
+);
+
+export type ConnectionAlert = typeof connectionAlerts.$inferSelect;
+export type NewConnectionAlert = typeof connectionAlerts.$inferInsert;
 
 export const syncRuns = pgTable(
   "sync_runs",

@@ -53,13 +53,20 @@ const resolveBotToken = async (orgId: string): Promise<string | null> => {
 export const sendSlack = async (
   args: SendSlackArgs
 ): Promise<SendSlackResult> => {
-  const token =
-    args.botToken ??
-    (await resolveBotToken(args.orgId)) ??
-    process.env.SLACK_BOT_TOKEN;
+  // Day-6: per-org install (preferred) → explicit override → system fallback.
+  // The system token (SLACK_BOT_TOKEN) is no longer the silent default; it
+  // requires DELIVERY_SLACK_FALLBACK_SYSTEM_TOKEN=true to be considered. The
+  // override (`args.botToken`) still wins for tests and admin one-offs.
+  const perOrg = await resolveBotToken(args.orgId);
+  const fallbackEnabled =
+    process.env.DELIVERY_SLACK_FALLBACK_SYSTEM_TOKEN === "true";
+  const systemToken = fallbackEnabled
+    ? (process.env.SLACK_BOT_TOKEN ?? null)
+    : null;
+  const token = args.botToken ?? perOrg ?? systemToken;
   if (!token) {
     throw new Error(
-      "no Slack bot token available (org has no Slack connection and SLACK_BOT_TOKEN not set)"
+      "no Slack bot token available (org has no per-org install; system fallback disabled — set DELIVERY_SLACK_FALLBACK_SYSTEM_TOKEN=true to allow)"
     );
   }
   const client = new WebClient(token);

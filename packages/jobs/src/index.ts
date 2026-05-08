@@ -5,6 +5,15 @@ export {
 } from "./ad-spend-apply";
 export { computeDailyMetricsTask } from "./compute-daily-metrics";
 export {
+  type ConnectionHealthState,
+  type ConnectionHealthSummary,
+  type ConnectionRowForHealth,
+  classifyConnectionHealth,
+  connectionHealthJob,
+  runConnectionHealthFor,
+  type SlackDmDeps,
+} from "./connection-health";
+export {
   dailyReportForOrgTask,
   dailyReportTickTask,
 } from "./daily-report";

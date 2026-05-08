@@ -33,6 +33,12 @@ export const shopifyOrderSchema = z
     fulfillment_status: z.string().nullable().optional(),
     created_at: z.string(),
     cancelled_at: z.string().nullable().optional(),
+    // Day-6 attribution fields. All optional — older Shopify versions and
+    // some POS / draft-order payloads omit them. extractOrderAttribution
+    // tolerates nulls.
+    landing_site: z.string().nullable().optional(),
+    referring_site: z.string().nullable().optional(),
+    source_name: z.string().nullable().optional(),
     line_items: z
       .array(
         z

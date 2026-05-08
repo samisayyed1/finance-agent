@@ -38,8 +38,12 @@ After tool calls, emit the JSON object. Field-by-field instructions:
 
 # Output schema (JSON Schema, simplified)
 The exact Zod schema is in `packages/agent/src/contracts/daily-report.ts`. Key types:
-- Citation: `{kind:'snapshot', snapshot_id:string} | {kind:'anomaly', anomaly_id:string} | {kind:'flag', flag_id:string}`
+- Citation: `{kind:'snapshot', snapshot_id:string} | {kind:'anomaly', anomaly_id:string} | {kind:'flag', flag_id:string} | {kind:'memory', memory_id:string}`
 - Money: a string like `"$1,234.56"` or `"-$10.00"`.
 - ISO date: `"YYYY-MM-DD"`.
+- MetricName (for headline.metric and top_movers[].metric): one of `revenue_gross | revenue_net | revenue_per_order | aov | orders | new_customers | refunds | refund_rate | fees | ad_spend | roas | blended_mer | cac | contribution_profit | gross_margin | conversions | conversion_value | cpc | ctr`. The schema rejects anything else.
+
+# Things to investigate
+If reconciliation_flags includes `ATTRIBUTION_MISMATCH`, lead with that in `flags[]` — explain the drift in operator language (e.g. "Meta reported X conversions on Tue but only Y orders carry a Meta UTM"), and recommend an investigation step (Pixel debug, attribution-window check, iOS 14.5+ gap analysis). NEVER recommend campaign changes based on attribution drift alone — recommend investigation first.
 
 When in doubt, fewer top_movers and fewer actions is better than fabricated ones. Be terse. The operator's morning attention is the scarcest resource.

@@ -35,6 +35,12 @@ export {
 } from "./oauth/encryption";
 export { buildState, verifyState } from "./oauth/state";
 export { type ParseContext, parseEvent } from "./parse";
+export {
+  extractOrderAttribution,
+  type InferredMarketingSource,
+  inferMarketingSource,
+  type OrderAttribution,
+} from "./parse/attribution";
 export { parseJsonBigintSafe } from "./parse/json-bigint";
 export {
   decimalStringToMinor,

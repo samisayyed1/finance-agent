@@ -6,10 +6,20 @@ export const FLAG_KINDS = [
   "FEE_DRIFT",
   "PAYOUT_GAP",
   "PERIOD_GAP",
+  "ATTRIBUTION_MISMATCH",
 ] as const;
 
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
+export {
+  AD_SOURCES,
+  type AdMetricDailySummary,
+  type AdSource,
+  type AttributionMismatchInput,
+  type AttributionMismatchResult,
+  detectAttributionMismatch,
+  type OrderForAttribution,
+} from "./attribution-match";
 export {
   type Match,
   type MatchOptions,

@@ -1,0 +1,28 @@
+{
+  "id": 5783412345001,
+  "order_number": 1042,
+  "email": "alice@example.com",
+  "currency": "USD",
+  "subtotal_price": "120.00",
+  "total_tax": "0.00",
+  "total_discounts": "0.00",
+  "total_price": "120.00",
+  "financial_status": "paid",
+  "fulfillment_status": null,
+  "created_at": "2026-05-08T15:14:00Z",
+  "cancelled_at": null,
+  "landing_site": "/products/widget?utm_source=facebook&utm_medium=paid&utm_campaign=spring-prospecting&utm_content=ugc-sarah",
+  "referring_site": "https://m.facebook.com/",
+  "source_name": "web",
+  "line_items": [
+    {
+      "id": 13123412341,
+      "sku": "WIDGET-RED",
+      "product_id": 5500001,
+      "title": "Widget — Red",
+      "quantity": 1,
+      "price": "120.00",
+      "tax_lines": []
+    }
+  ]
+}
