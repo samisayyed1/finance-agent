@@ -1,16 +1,16 @@
+/**
+ * stripe-normalize idempotency integration tests.
+ *
+ * Gated on DATABASE_URL: skips cleanly when unset. DB-bound imports are
+ * loaded inside `beforeAll` to keep the file from crashing at module
+ * load when DATABASE_URL is absent (the env validator inside
+ * @ai-cfo/database throws eagerly).
+ */
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseStripeEvent } from "@ai-cfo/connector-stripe";
-import {
-  database,
-  eq,
-  organizations,
-  payments,
-  payouts,
-  refunds,
-} from "@ai-cfo/database";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyStripeEvents } from "../src/stripe-apply";
 
 const FIXTURES = resolve(
   import.meta.dirname,
@@ -24,16 +24,21 @@ const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(resolve(FIXTURES, `${name}.json`), "utf-8"));
 
 const SLUG = `test-stripe-norm-${Date.now()}`;
-let orgId: string;
-
 const skipIfNoDb = !process.env.DATABASE_URL;
 
 describe.skipIf(skipIfNoDb)("stripe-normalize idempotency", () => {
+  let db: typeof import("@ai-cfo/database");
+  let apply: typeof import("../src/stripe-apply");
+  let orgId: string;
+
   beforeAll(async () => {
-    const inserted = await database
-      .insert(organizations)
+    db = await import("@ai-cfo/database");
+    apply = await import("../src/stripe-apply");
+
+    const inserted = await db.database
+      .insert(db.organizations)
       .values({ name: "test-stripe-normalize", slug: SLUG })
-      .returning({ id: organizations.id });
+      .returning({ id: db.organizations.id });
     const row = inserted[0];
     if (!row) {
       throw new Error("failed to create test org");
@@ -43,7 +48,9 @@ describe.skipIf(skipIfNoDb)("stripe-normalize idempotency", () => {
 
   afterAll(async () => {
     if (orgId) {
-      await database.delete(organizations).where(eq(organizations.id, orgId));
+      await db.database
+        .delete(db.organizations)
+        .where(db.eq(db.organizations.id, orgId));
     }
   });
 
@@ -53,17 +60,17 @@ describe.skipIf(skipIfNoDb)("stripe-normalize idempotency", () => {
       rawEvent: fixture("charge-succeeded"),
     });
 
-    await applyStripeEvents(events, orgId);
-    const first = await database
+    await apply.applyStripeEvents(events, orgId);
+    const first = await db.database
       .select()
-      .from(payments)
-      .where(eq(payments.orgId, orgId));
+      .from(db.payments)
+      .where(db.eq(db.payments.orgId, orgId));
 
-    await applyStripeEvents(events, orgId);
-    const second = await database
+    await apply.applyStripeEvents(events, orgId);
+    const second = await db.database
       .select()
-      .from(payments)
-      .where(eq(payments.orgId, orgId));
+      .from(db.payments)
+      .where(db.eq(db.payments.orgId, orgId));
 
     expect(first).toHaveLength(1);
     expect(second).toHaveLength(1);
@@ -72,17 +79,17 @@ describe.skipIf(skipIfNoDb)("stripe-normalize idempotency", () => {
   });
 
   it("charge.refunded inserts a Refund linked to the existing Payment", async () => {
-    await applyStripeEvents(
+    await apply.applyStripeEvents(
       parseStripeEvent({
         orgId,
         rawEvent: fixture("charge-refunded"),
       }),
       orgId
     );
-    const refundRows = await database
+    const refundRows = await db.database
       .select()
-      .from(refunds)
-      .where(eq(refunds.orgId, orgId));
+      .from(db.refunds)
+      .where(db.eq(db.refunds.orgId, orgId));
     expect(refundRows.length).toBeGreaterThan(0);
     const refund = refundRows[0];
     if (!refund) {
@@ -93,17 +100,17 @@ describe.skipIf(skipIfNoDb)("stripe-normalize idempotency", () => {
   });
 
   it("payout.created upserts a Payout in pending status", async () => {
-    await applyStripeEvents(
+    await apply.applyStripeEvents(
       parseStripeEvent({
         orgId,
         rawEvent: fixture("payout-created"),
       }),
       orgId
     );
-    const rows = await database
+    const rows = await db.database
       .select()
-      .from(payouts)
-      .where(eq(payouts.orgId, orgId));
+      .from(db.payouts)
+      .where(db.eq(db.payouts.orgId, orgId));
     expect(rows.length).toBeGreaterThan(0);
     const payout = rows.find((p) => p.sourcePayoutId === "po_test_payout_1");
     expect(payout?.status).toBe("pending");

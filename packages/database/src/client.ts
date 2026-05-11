@@ -79,16 +79,61 @@ export const schema = {
   orgSettings,
 };
 
+// Lazy-init the connection. Two reasons:
+//
+//   1. Module-load no longer triggers env validation. Tests that only
+//      import types from `@ai-cfo/database` (e.g. `import type {...}`)
+//      or that gate behavior on DATABASE_URL via `describe.skipIf`
+//      survive without a populated env. Previously every consumer
+//      crashed at module load when DATABASE_URL was unset.
+//
+//   2. Cold-start cost is deferred: Next.js routes that never read
+//      from this DB (static pages, image routes, public auth flows)
+//      no longer pay the postgres-client construction tax on the
+//      import side.
+//
+// The first `database.<op>()` triggers `getDb()` which validates env,
+// constructs the postgres client, caches it on the global, and wraps
+// it in drizzle. Subsequent calls reuse the cached instance — same
+// pooling behavior as the eager version.
+//
+// Implementation is a Proxy<drizzle-instance> so the public type
+// signature is unchanged.
+
+type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+
 const globalForDb = global as unknown as {
   __aiCfoDbClient: postgres.Sql | undefined;
+  __aiCfoDrizzle: DrizzleDb | undefined;
 };
 
-const sql =
-  globalForDb.__aiCfoDbClient ??
-  postgres(keys().DATABASE_URL, { prepare: false });
+const getDb = (): DrizzleDb => {
+  if (globalForDb.__aiCfoDrizzle) {
+    return globalForDb.__aiCfoDrizzle;
+  }
+  const sql =
+    globalForDb.__aiCfoDbClient ??
+    postgres(keys().DATABASE_URL, { prepare: false });
+  if (process.env.NODE_ENV !== "production") {
+    globalForDb.__aiCfoDbClient = sql;
+  }
+  const db = drizzle(sql, { schema });
+  if (process.env.NODE_ENV !== "production") {
+    globalForDb.__aiCfoDrizzle = db;
+  }
+  return db;
+};
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__aiCfoDbClient = sql;
-}
+// biome-ignore lint/suspicious/noExplicitAny: Proxy target placeholder; reads/writes are forwarded to the lazy-resolved drizzle instance
+const databaseProxyTarget = {} as any;
 
-export const database = drizzle(sql, { schema });
+export const database: DrizzleDb = new Proxy(databaseProxyTarget, {
+  get(_target, prop, receiver) {
+    const db = getDb();
+    const value = Reflect.get(db as object, prop, receiver);
+    // Drizzle methods (`.select()`, `.insert()`, etc.) are typed as
+    // properties whose call-time `this` is the drizzle instance, so
+    // rebind functions through .bind(db) to preserve method semantics.
+    return typeof value === "function" ? value.bind(db) : value;
+  },
+}) as DrizzleDb;

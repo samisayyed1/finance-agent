@@ -279,3 +279,6 @@ packages/database/generated
 .source
 # Claude Code worktrees
 .claude/worktrees/
+
+# Generated eval output (regenerated every promptfoo eval run)
+packages/evals/eval-results.json

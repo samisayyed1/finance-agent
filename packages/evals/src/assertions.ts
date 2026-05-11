@@ -8,7 +8,16 @@
  * harness keeps using its older, simpler fixture shape so we don't churn
  * historical fixtures every time the contract evolves. The assertions are
  * self-contained — they don't import from @ai-cfo/agent.
+ *
+ * Fixture loading: promptfoo's `file://` substitution in `vars` is brittle —
+ * it sometimes passes the path through as a literal string instead of
+ * inlining the JSON. To insulate the assertions from that, we accept either
+ *   (a) an inline fixture object on `vars.fixture`, or
+ *   (b) a `file://`-prefixed path that we resolve and parse ourselves.
  */
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 interface AssertContext {
   vars: Record<string, unknown>;
@@ -30,10 +39,67 @@ interface FixtureLike {
 }
 
 const NUMERIC_TOKEN_RE = /-?\$?\d[\d,]*(\.\d+)?%?/g;
+const FILE_URL_PREFIX = "file://";
+
+const PACKAGE_ROOT = resolve(import.meta.dirname, "..");
+const LEADING_DOT_SLASH_RE = /^\.\//;
+
+const loadFixtureFromPath = (rawPath: string): FixtureLike => {
+  // Strip the file:// scheme; resolve against the package root so
+  // file://fixtures/foo.json and file://./fixtures/foo.json both work.
+  const cleaned = rawPath
+    .replace(FILE_URL_PREFIX, "")
+    .replace(LEADING_DOT_SLASH_RE, "");
+  const abs = resolve(PACKAGE_ROOT, cleaned);
+  const raw = JSON.parse(readFileSync(abs, "utf-8")) as {
+    fixture?: FixtureLike;
+  };
+  return raw.fixture ?? {};
+};
+
+interface FixtureEnvelope {
+  fixture?: FixtureLike;
+}
 
 const fixtureFromContext = (context: AssertContext): FixtureLike => {
-  const vars = context.vars as { fixture?: FixtureLike };
-  return vars.fixture ?? {};
+  const raw = (context.vars as { fixture?: unknown }).fixture;
+  if (!raw) {
+    return {};
+  }
+  // Promptfoo's `file://path.json` substitution in vars produces a
+  // STRING — sometimes the literal path, sometimes the file contents.
+  // Accept all four shapes:
+  //   1. inline object on vars.fixture
+  //   2. file:// path string (promptfoo passed the URL through)
+  //   3. raw JSON-text string (promptfoo loaded the file)
+  //   4. inline envelope object { fixture: {...} } (from #3 after parse)
+  if (typeof raw === "string") {
+    if (raw.startsWith(FILE_URL_PREFIX)) {
+      return loadFixtureFromPath(raw);
+    }
+    try {
+      const parsed = JSON.parse(raw) as FixtureLike | FixtureEnvelope;
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "fixture" in parsed &&
+        parsed.fixture
+      ) {
+        return parsed.fixture;
+      }
+      return parsed as FixtureLike;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof raw === "object" && raw !== null) {
+    const envelope = raw as FixtureEnvelope;
+    if (envelope.fixture) {
+      return envelope.fixture;
+    }
+    return raw as FixtureLike;
+  }
+  return {};
 };
 
 /**

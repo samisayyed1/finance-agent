@@ -19,8 +19,14 @@
  *   bun run scripts/seed-demo-org.ts --slug=demo-shopify-brand --dry-run
  *   bun run scripts/seed-demo-org.ts --slug=demo-shopify-brand --with-agent-runs
  *
- * --with-agent-runs is wired but defaults OFF; Phase 4 (next session) hooks
- * the daily-report agent in for each seeded day.
+ * When `--with-agent-runs` is set the orchestrator additionally
+ *   - invokes the daily-report agent for each seeded day (writes
+ *     agent_traces + reports rows),
+ *   - distills agent_memories from the run's traces (one pass at the
+ *     end of the loop), and
+ *   - writes one closed_loop_metrics row per day.
+ * The MCP server (apps/mcp) and ANTHROPIC_API_KEY must be reachable;
+ * docs/runbooks/DEMO_VIDEO_SCRIPT.md spells out the two-terminal flow.
  */
 
 import {
@@ -40,10 +46,18 @@ import {
   refunds,
   sql,
 } from "@ai-cfo/database";
+import {
+  createAnthropicDistiller,
+  measureClosedLoopForOrg,
+  writeMemoriesFromTracesForOrg,
+} from "@ai-cfo/learning";
 import { computeDailyMetrics } from "@ai-cfo/metrics";
 import { runReconciliation } from "@ai-cfo/reconcile";
 import pino from "pino";
+import { runAgentForDay } from "./seed/agent-run-for-day";
 import { runAnomalyJobForDay } from "./seed/anomaly-job";
+import type { CliArgs } from "./seed/parse-args";
+import { parseArgs } from "./seed/parse-args";
 import { makeRng } from "./seed/rng";
 import { maeveScenario } from "./seed/scenario-maeve";
 import { synthesizeAdSpend } from "./seed/synthesize-ads";
@@ -76,42 +90,9 @@ const startOfUtcDay = (d: Date): Date =>
 
 const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
 
-interface CliArgs {
-  dryRun: boolean;
-  limitDays: number;
-  reset: boolean;
-  slug: string;
-  withAgentRuns: boolean;
-}
-
-const parseArgs = (argv: readonly string[]): CliArgs => {
-  let slug: string | null = null;
-  let reset = false;
-  let limitDays = 90;
-  let withAgentRuns = false;
-  let dryRun = false;
-  for (const a of argv) {
-    if (a.startsWith("--slug=")) {
-      slug = a.slice("--slug=".length);
-    } else if (a === "--reset") {
-      reset = true;
-    } else if (a.startsWith("--limit-days=")) {
-      const n = Number.parseInt(a.slice("--limit-days=".length), 10);
-      if (!Number.isFinite(n) || n < 1) {
-        throw new Error(`--limit-days must be a positive integer; got '${a}'`);
-      }
-      limitDays = n;
-    } else if (a === "--with-agent-runs") {
-      withAgentRuns = true;
-    } else if (a === "--dry-run") {
-      dryRun = true;
-    }
-  }
-  if (!slug) {
-    throw new Error("seed-demo-org: --slug=<orgSlug> is required");
-  }
-  return { slug, reset, limitDays, withAgentRuns, dryRun };
-};
+// Re-export CliArgs type so legacy callers that imported from this module
+// keep working. The canonical home is scripts/seed/parse-args.ts.
+export type { CliArgs } from "./seed/parse-args";
 
 interface ResolvedOrg {
   id: string;
@@ -504,14 +485,21 @@ const insertAdMetricsDaily = async (
 
 interface SeedSummary {
   adMetricsInserted: number;
+  agentRunsAttempted: number;
+  agentRunsFailed: number;
+  agentRunsSucceeded: number;
   campaignsInserted: number;
+  closedLoopRowsWritten: number;
   daysProcessed: {
     day: string;
     snapshotId: string;
     flagsBefore: number;
     anomalyIds: string[];
+    agentTraceId: string | null;
+    agentRunError: string | null;
   }[];
   lineItemsInserted: number;
+  memoriesWritten: number;
   ordersInserted: number;
   orgId: string;
   paymentsInserted: number;
@@ -526,16 +514,27 @@ interface SeedSummary {
   refundsInserted: number;
 }
 
-const main = async (): Promise<void> => {
-  const args = parseArgs(process.argv.slice(2));
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: orchestrator stitches synthesis + DB insert + daily pipeline + optional agent/memory/closed-loop phases; splitting it would obscure the linear plan-of-record
+export const runSeed = async (args: CliArgs): Promise<unknown> => {
   log.info({ args }, "seed-demo-org: start");
 
   if (args.dryRun) {
     log.info("dry-run: no DB writes will be performed");
   }
   if (args.withAgentRuns) {
+    if (!process.env.MCP_SERVER_URL) {
+      throw new Error(
+        "--with-agent-runs set but MCP_SERVER_URL is unset; start apps/mcp (bun --bun dev) and export MCP_SERVER_URL=http://localhost:3010/mcp"
+      );
+    }
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error(
+        "--with-agent-runs set but ANTHROPIC_API_KEY is unset; required for the Claude Agent SDK transport"
+      );
+    }
     log.info(
-      "--with-agent-runs is wired but Phase-2 of Day 8 defers all agent invocations to next session; flag ignored this run"
+      { mcpServerUrl: process.env.MCP_SERVER_URL },
+      "--with-agent-runs enabled: per-day agent runs + memory distillation + closed-loop snapshots"
     );
   }
 
@@ -657,6 +656,11 @@ const main = async (): Promise<void> => {
       feeDriftFlags: 0,
       attributionMismatchFlags: 0,
     },
+    agentRunsAttempted: 0,
+    agentRunsSucceeded: 0,
+    agentRunsFailed: 0,
+    closedLoopRowsWritten: 0,
+    memoriesWritten: 0,
   };
 
   for (
@@ -684,12 +688,98 @@ const main = async (): Promise<void> => {
       date: day,
     });
 
+    // Phase 4: optional agent run. The agent driving Claude → MCP → DB
+    // is the only piece that hits an external paid API, so it's gated
+    // behind an explicit flag.
+    let agentTraceId: string | null = null;
+    let agentRunError: string | null = null;
+    if (args.withAgentRuns) {
+      summary.agentRunsAttempted += 1;
+      log.info({ day: dayLabel }, "pipeline: runAgentForDay");
+      const agentResult = await runAgentForDay({
+        orgId: org.id,
+        orgName: org.name,
+        date: day,
+        snapshotId: metrics.snapshot_id,
+      });
+      if (agentResult.ok) {
+        agentTraceId = agentResult.traceId;
+        summary.agentRunsSucceeded += 1;
+      } else {
+        agentRunError = agentResult.error ?? agentResult.reason;
+        summary.agentRunsFailed += 1;
+        log.warn(
+          { day: dayLabel, reason: agentResult.reason, error: agentRunError },
+          "agent run failed; continuing with remaining days"
+        );
+      }
+    }
+
     summary.daysProcessed.push({
       day: dayLabel,
       snapshotId: metrics.snapshot_id,
       flagsBefore: 0,
       anomalyIds: anomalyResult.anomalyIds,
+      agentTraceId,
+      agentRunError,
     });
+  }
+
+  // Phase 5: distill memories from traces written during this run. Single
+  // pass at the end so every day's trace is in scope; the production daily
+  // job runs every 00:30 UTC on a 24h sliding window. We pin `since` to the
+  // earliest day so the entire seeded history feeds the distiller.
+  if (args.withAgentRuns && summary.agentRunsSucceeded > 0) {
+    log.info("phase 5: writeMemoriesFromTraces (full seeded window)");
+    try {
+      const memorySummary = await writeMemoriesFromTracesForOrg(
+        org.id,
+        org.name,
+        window.start,
+        { callModel: createAnthropicDistiller() }
+      );
+      summary.memoriesWritten = memorySummary.written;
+      log.info(
+        {
+          written: memorySummary.written,
+          dropped: memorySummary.dropped,
+        },
+        "phase 5 complete"
+      );
+    } catch (err) {
+      log.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "phase 5: writeMemoriesFromTracesForOrg failed; continuing"
+      );
+    }
+  }
+
+  // Phase 6: per-day closed-loop snapshot. measureClosedLoopForOrg writes
+  // one row per day into `closed_loop_metrics`. We re-anchor `since` to
+  // 24h before each seeded day so the per-day window only ingests that
+  // day's traces, mirroring the production daily cadence.
+  if (args.withAgentRuns) {
+    log.info("phase 6: measureClosedLoopForOrg per day");
+    for (const d of summary.daysProcessed) {
+      const day = new Date(`${d.day}T00:00:00.000Z`);
+      const since = new Date(day.getTime() - ONE_DAY_MS);
+      try {
+        await measureClosedLoopForOrg(org.id, since, d.day);
+        summary.closedLoopRowsWritten += 1;
+      } catch (err) {
+        log.warn(
+          {
+            day: d.day,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "measureClosedLoopForOrg failed for day; continuing"
+        );
+      }
+    }
+    log.info(
+      { rowsWritten: summary.closedLoopRowsWritten },
+      "phase 6 complete"
+    );
   }
 
   // ---- Print summary ----
@@ -712,17 +802,30 @@ const main = async (): Promise<void> => {
         0
       ),
     },
+    closedLoop: {
+      agentRunsAttempted: summary.agentRunsAttempted,
+      agentRunsSucceeded: summary.agentRunsSucceeded,
+      agentRunsFailed: summary.agentRunsFailed,
+      memoriesWritten: summary.memoriesWritten,
+      closedLoopRowsWritten: summary.closedLoopRowsWritten,
+    },
     sampleDay: summary.daysProcessed.at(-1) ?? null,
   };
   log.info({ summary: printable }, "seed-demo-org: done");
   process.stdout.write(`\n${JSON.stringify(printable, null, 2)}\n`);
+  return printable;
 };
 
-main()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((err) => {
-    log.error({ err }, "seed-demo-org: FAILED");
-    process.exit(1);
-  });
+// CLI entry-point guard. When this module is imported by a test, the bottom
+// invocation is skipped (no DB connection, no exit). `import.meta.main` is
+// true only when Bun executes the file directly via `bun run`.
+if (import.meta.main) {
+  runSeed(parseArgs(process.argv.slice(2)))
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      log.error({ err }, "seed-demo-org: FAILED");
+      process.exit(1);
+    });
+}

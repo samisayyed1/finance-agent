@@ -1,20 +1,20 @@
-# AI Operating CFO — eval harness (Day-0).
+# AI Operating CFO — eval harness.
 #
-# Promptfoo runs the agent against five fixture days, and asserts on:
-#   - JSON-shape (DailyReport schema is valid)
-#   - grounding_rate: every numeric token in content_md must appear in citations[]
-#   - feature_recall: the report mentions the canonical drivers for that fixture
-#   - citation_validity: every citation id exists in the trace's tool outputs
+# Promptfoo runs an echo provider against five fixture days and asserts on:
+#   - groundingRate: every numeric token in content_md must appear in
+#                    fixture.citations[].value
+#   - featureRecall: the output mentions every expected_feature
 #
-# Day-0 status: fixtures are placeholder JSON shaped like the real DailyReport,
-# and assertions reference custom JS in src/assertions.ts. The provider points
-# at a placeholder echo-bot until packages/agent.run lands; ANTHROPIC_API_KEY
-# is unused in Day-0 so this can run in CI without secrets.
+# Day-3 status: echo provider returns the fixture's content_md as the agent
+# output. Day-N+ will replace the echo with the real Anthropic-driven agent
+# so the harness verifies the model's prose, not the fixture's. Until then,
+# this harness verifies the assertion mechanics work end-to-end on
+# well-formed fixtures.
 
 description: AI CFO grounding + feature-recall harness
 
 prompts:
-  - "{{report_md}}" # Day-0: echo the fixture's content_md back; real provider runs the agent.
+  - "{{report_md}}" # Echo: the agent's output IS the fixture's content_md.
 
 providers:
   - id: echo
@@ -23,14 +23,19 @@ providers:
 defaultTest:
   options:
     transform: |
-      // Echo provider: pretend the fixture content_md is the agent's output.
-      return { output: vars.report_md };
+      // Echo provider: return the prepared report_md as the agent's
+      // output. promptfoo's transform signature is (output, context)
+      // — test vars live on context.vars, not the bare `vars`.
+      return context.vars.report_md;
 
+# Fixture JSONs ship a `{ fixture: { citations: [...], expected_features: [...] } }`
+# blob. We load them via `file://` into a single `fixture` var so
+# `context.vars.fixture` resolves the way `src/assertions.ts` expects.
 tests:
   - vars:
       fixture_label: typical
       report_md: "Revenue was $42,000."
-    file: ./fixtures/typical.json
+      fixture: file://./fixtures/typical.json
     assert:
       - type: javascript
         value: "file://./src/assertions.ts:groundingRate"
@@ -40,7 +45,7 @@ tests:
   - vars:
       fixture_label: profit_drop
       report_md: "Contribution profit dropped to $1,200 from $5,400 yesterday."
-    file: ./fixtures/profit_drop.json
+      fixture: file://./fixtures/profit_drop.json
     assert:
       - type: javascript
         value: "file://./src/assertions.ts:groundingRate"
@@ -50,7 +55,7 @@ tests:
   - vars:
       fixture_label: roas_spike
       report_md: "Blended MER hit 4.2x, up from 2.1x."
-    file: ./fixtures/roas_spike.json
+      fixture: file://./fixtures/roas_spike.json
     assert:
       - type: javascript
         value: "file://./src/assertions.ts:groundingRate"
@@ -60,7 +65,7 @@ tests:
   - vars:
       fixture_label: refund_spike
       report_md: "Refund rate climbed to 8.7% (vs 1.2% baseline)."
-    file: ./fixtures/refund_spike.json
+      fixture: file://./fixtures/refund_spike.json
     assert:
       - type: javascript
         value: "file://./src/assertions.ts:groundingRate"
@@ -70,7 +75,7 @@ tests:
   - vars:
       fixture_label: reconciliation_gap
       report_md: "23 orders missing payment in Stripe (delta $3,840)."
-    file: ./fixtures/reconciliation_gap.json
+      fixture: file://./fixtures/reconciliation_gap.json
     assert:
       - type: javascript
         value: "file://./src/assertions.ts:groundingRate"
