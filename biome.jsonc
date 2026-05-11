@@ -23,7 +23,8 @@
       "!apps/email/.react-email",
       "!packages/cms/basehub-types.d.ts",
       "!.claude/skills",
-      "!supabase/migrations"
+      "!supabase/migrations",
+      "!packages/evals/eval-results.json"
     ]
   }
 }
