@@ -835,6 +835,7 @@
         "@ai-cfo/connector-shopify": "workspace:*",
         "@ai-cfo/database": "workspace:*",
         "@ai-cfo/delivery": "workspace:*",
+        "@ai-cfo/memory": "workspace:*",
         "@ai-cfo/metrics": "workspace:*",
         "@ai-cfo/reconcile": "workspace:*",
         "@ai-cfo/reports": "workspace:*",
