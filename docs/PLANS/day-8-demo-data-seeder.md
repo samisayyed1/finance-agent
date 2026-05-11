@@ -178,3 +178,41 @@ README updated with `bun run scripts/seed-demo-org.ts --slug=…` quickstart.
 - `scripts/seed/tests/synthesize-stripe.test.ts` (4 tests)
 - `scripts/seed-demo-org.ts` (CLI orchestrator)
 - `docs/runbooks/DEMO_VIDEO_SCRIPT.md` (Phase 8)
+
+## Session 2 completion log (2026-05-11)
+
+### Phase 2 — Live verification (PASSED)
+- Seeder connected via correct pooler hostname (`aws-1-ap-southeast-1.pooler.supabase.com:6543`)
+- One-day seed: 34 orders, 24 payments, 72 line items, 5 ad campaigns, 5 ad metrics
+- Full pipeline verified: computeDailyMetrics + runReconciliation + runAnomalyJobForDay
+
+### Phase 3 — 90-day seed (COMPLETED)
+- 3,219 orders, 6,453 line items, 2,973 payments, 0 refunds, 13 payouts, 450 ad metrics
+- 90 daily_metrics rows, 145 reconciliation flags, 46 anomalies
+- `MAX_PARAMETERS_EXCEEDED` fix: batched `insertLineItems` and `insertPayments` in 1,000-row chunks
+- Pooler hostname fix: Supabase API revealed correct pooler is `aws-1-...:6543` (not `aws-0-...:5432`)
+
+### Phase 4 — Agent runs (DEFERRED)
+- Requires explicit cost approval (~$0.70 for full 7-day run)
+- `--with-agent-runs` flag is wired but defaults OFF
+
+### Phase 5 — Memory preseed (COMPLETED)
+- `scripts/preseed-memories.ts` created
+- 5 memories written: 4 pattern + 1 vendor_quirk
+- Used `createFakeEmbedder()` (OpenAI quota exceeded on provided key)
+- Added `@ai-cfo/memory` to `scripts/package.json` dependencies
+
+### Phase 6 — Integration tests (COMPLETED)
+- `scripts/seed/tests/seed-smoke.test.ts` — gated on `TEST_DEMO_DB_URL`
+- Asserts: 90+ daily_metrics, 6,000-9,000 orders, 5+ anomalies, 8+ flags
+- Cleanup via `--reset` in afterAll
+
+### Phase 7 — Docs (COMPLETED)
+- `docs/runbooks/DEMO_DATA_OPERATIONS.md` — operator-facing seed/reset/troubleshooting guide
+- `docs/runbooks/DEMO_VIDEO_SCRIPT.md` — 90-second 6-scene screencast script
+
+### Open issues surfaced
+- **Refunds = 0**: `synthesize-stripe.ts` does not generate refund rows; anomaly #3 (refund spike) cannot surface
+- **ORDER_MISSING_PAYMENT = 0**: Payments reference sourceOrderRef but reconciliation produces PAYMENT_WITHOUT_ORDER instead — payment-to-order matching may not work with synthesized data
+- **Pooler hostname discovery**: Supabase projects may use different pooler subdomains (`aws-0-` vs `aws-1-`); added runbook guidance
+- **OpenAI quota**: `OPENAI_API_KEY` had no credits; preseed used fake embedder as fallback

@@ -301,12 +301,18 @@ const insertLineItems = async (
   if (rows.length === 0) {
     return 0;
   }
-  const inserted = await database
-    .insert(orderLineItems)
-    .values(rows)
-    .onConflictDoNothing()
-    .returning({ id: orderLineItems.id });
-  return inserted.length;
+  let totalInserted = 0;
+  const CHUNK = 1000;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const inserted = await database
+      .insert(orderLineItems)
+      .values(chunk)
+      .onConflictDoNothing()
+      .returning({ id: orderLineItems.id });
+    totalInserted += inserted.length;
+  }
+  return totalInserted;
 };
 
 const insertPayments = async (
@@ -331,13 +337,20 @@ const insertPayments = async (
     processedAt: p.processedAt,
     sourceMetadata: { demo: true, sourceOrderId: p.sourceOrderRef },
   }));
-  const inserted = await database
-    .insert(payments)
-    .values(rows)
-    .onConflictDoNothing()
-    .returning({ id: payments.id, sourcePaymentId: payments.sourcePaymentId });
-  for (const r of inserted) {
-    map.set(r.sourcePaymentId, r.id);
+  const CHUNK = 1000;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const inserted = await database
+      .insert(payments)
+      .values(chunk)
+      .onConflictDoNothing()
+      .returning({
+        id: payments.id,
+        sourcePaymentId: payments.sourcePaymentId,
+      });
+    for (const r of inserted) {
+      map.set(r.sourcePaymentId, r.id);
+    }
   }
   return map;
 };
