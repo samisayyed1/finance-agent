@@ -89,6 +89,38 @@ export interface TodayPageData {
   readonly topAnomalies: readonly TodayAnomaly[];
 }
 
+export interface CitationLookup {
+  readonly anomalies: Readonly<Record<string, AnomalyLookupRow>>;
+  readonly flags: Readonly<Record<string, FlagLookupRow>>;
+  readonly snapshots: Readonly<Record<string, SnapshotLookupRow>>;
+}
+
+export interface SnapshotLookupRow {
+  readonly date: string;
+  readonly orders: number | null;
+  readonly revenueGross: string | null;
+  readonly revenueNet: string | null;
+  readonly roas: string | null;
+  readonly snapshotId: string;
+}
+
+export interface AnomalyLookupRow {
+  readonly anomalyId: string;
+  readonly date: string;
+  readonly metric: string;
+  readonly severity: string;
+  readonly suggestedCause: string | null;
+  readonly value: string | null;
+}
+
+export interface FlagLookupRow {
+  readonly createdAt: Date;
+  readonly delta: string | null;
+  readonly flagId: string;
+  readonly kind: string;
+  readonly status: string;
+}
+
 const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
 
 const subDays = (d: Date, days: number): Date => {
@@ -239,6 +271,93 @@ const fetchLatestReport = async (
     .orderBy(desc(reports.date))
     .limit(1);
   return rows[0] ?? null;
+};
+
+/**
+ * Batch-fetch the underlying rows for every cited id surfaced in the AI
+ * summary markdown. RLS-scoped by `eq(table.orgId, orgId)`. Missing ids
+ * silently drop out of the result map — the renderer falls back to plain
+ * text for citations whose data no longer exists (e.g. a flag was
+ * resolved-and-purged after the report shipped).
+ */
+export const fetchCitationLookup = async (
+  orgId: string,
+  ids: {
+    readonly snapshot: readonly string[];
+    readonly anomaly: readonly string[];
+    readonly flag: readonly string[];
+  }
+): Promise<CitationLookup> => {
+  const snapshots: Record<string, SnapshotLookupRow> = {};
+  const anomaliesMap: Record<string, AnomalyLookupRow> = {};
+  const flags: Record<string, FlagLookupRow> = {};
+
+  if (ids.snapshot.length > 0) {
+    const rows = await database
+      .select({
+        snapshotId: dailyMetrics.snapshotId,
+        date: dailyMetrics.date,
+        revenueNet: dailyMetrics.revenueNet,
+        revenueGross: dailyMetrics.revenueGross,
+        roas: dailyMetrics.roas,
+        orders: dailyMetrics.orders,
+      })
+      .from(dailyMetrics)
+      .where(
+        and(
+          eq(dailyMetrics.orgId, orgId),
+          inArray(dailyMetrics.snapshotId, [...ids.snapshot])
+        )
+      );
+    for (const r of rows) {
+      snapshots[r.snapshotId] = r;
+    }
+  }
+
+  if (ids.anomaly.length > 0) {
+    const rows = await database
+      .select({
+        anomalyId: anomalies.anomalyId,
+        date: anomalies.date,
+        metric: anomalies.metric,
+        severity: anomalies.severity,
+        value: anomalies.currentValue,
+        suggestedCause: anomalies.suggestedCause,
+      })
+      .from(anomalies)
+      .where(
+        and(
+          eq(anomalies.orgId, orgId),
+          inArray(anomalies.anomalyId, [...ids.anomaly])
+        )
+      );
+    for (const r of rows) {
+      anomaliesMap[r.anomalyId] = r;
+    }
+  }
+
+  if (ids.flag.length > 0) {
+    const rows = await database
+      .select({
+        flagId: reconciliationFlags.flagId,
+        kind: reconciliationFlags.kind,
+        status: reconciliationFlags.status,
+        delta: reconciliationFlags.delta,
+        createdAt: reconciliationFlags.createdAt,
+      })
+      .from(reconciliationFlags)
+      .where(
+        and(
+          eq(reconciliationFlags.orgId, orgId),
+          inArray(reconciliationFlags.flagId, [...ids.flag])
+        )
+      );
+    for (const r of rows) {
+      flags[r.flagId] = r;
+    }
+  }
+
+  return { snapshots, anomalies: anomaliesMap, flags };
 };
 
 export const fetchTodayPageData = async (

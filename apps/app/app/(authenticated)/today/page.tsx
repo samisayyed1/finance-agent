@@ -41,7 +41,10 @@ import {
   formatPctSigned,
   formatRatio,
 } from "@/lib/format";
+import { harvestCitedIds } from "./components/citation-parser";
+import { GroundedSummary } from "./components/grounded-summary";
 import {
+  fetchCitationLookup,
   fetchTodayPageData,
   type TodayDailyMetrics,
   type TodaySyncHealth,
@@ -179,6 +182,16 @@ const TodayPage = async () => {
   }
 
   const data = await fetchTodayPageData(orgId);
+
+  // Iron Rule #6 surface: harvest citation ids from the AI summary
+  // markdown and batch-fetch the underlying rows so the grounded
+  // citation pills can render hover popovers without an extra round-trip.
+  const citationIds = data.report
+    ? harvestCitedIds(data.report.contentMd)
+    : { snapshot: [], anomaly: [], flag: [], memory: [] };
+  const citationLookup = data.report
+    ? await fetchCitationLookup(orgId, citationIds)
+    : { snapshots: {}, anomalies: {}, flags: {} };
 
   if (!data.daily) {
     return (
@@ -345,7 +358,11 @@ const TodayPage = async () => {
           <CardHeader>
             <CardTitle>AI summary</CardTitle>
             <CardDescription>
-              Generated for {data.report.date}.
+              Generated for {data.report.date}. Hover any{" "}
+              <span className="font-mono">snap</span>/
+              <span className="font-mono">anom</span>/
+              <span className="font-mono">flag</span> pill to see the underlying
+              database row — every number in this report is grounded to one.
               {data.report.traceId ? (
                 <span className="ml-2 font-mono text-xs">
                   trace:{data.report.traceId}
@@ -354,9 +371,10 @@ const TodayPage = async () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="whitespace-pre-wrap text-sm">
-              {data.report.contentMd}
-            </pre>
+            <GroundedSummary
+              lookup={citationLookup}
+              markdown={data.report.contentMd}
+            />
           </CardContent>
         </Card>
       ) : null}
