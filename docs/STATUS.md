@@ -4,8 +4,9 @@
 
 ## Current state (last updated: 2026-05-12)
 - **Day shipped**: Day 8 Session 1 (demo seeder Phase 0+1+2) — merged to main as 0d0f459
-- **Day in progress**: Day 8 Session 2 (Phase 4-8: agent runs + memories + closed-loop + e2e tests + docs)
-- **Cumulative real tests**: ~200+ passing (Session 2 adds 7 parse-args tests + 1 DB-gated e2e suite)
+- **Day in flight**: Day 8 Session 2 — PR #10 OPEN, CI running; Day 9 — PR (this one) stacked on top
+- **Day in progress**: Day 9 (demo launch prep) — citation pills, preflight checker, social copy
+- **Cumulative real tests**: ~210+ passing (Day 9 adds 10 citation-parser + 4 preflight-args)
 - **Pages live**: /today, /metrics, /analyst, /exports, /settings/{connections,reconciliation,team}
 - **Connectors live**: Shopify (full), Stripe (full), Meta (fixture-tested, awaits creds), Google (fixture-tested, awaits creds), Slack (OAuth shipped)
 - **Closed loop**: pgvector memory + 4 Trigger.dev learning jobs, agent_traces written on every run
@@ -39,8 +40,8 @@
 - [ ] Stripe Connect platform Client ID — pending
 
 ## What's next
-- **Day 8 (this session)**: Phase 4-8 — `--with-agent-runs` wired, memories distilled, per-day closed-loop snapshots, e2e test suite, demo video script. Full PR.
-- **Day 9**: Record 90-second demo video using docs/runbooks/DEMO_VIDEO_SCRIPT.md. Post Twitter/LinkedIn.
+- **Day 9 (this PR)**: Interactive citation pills on `/today` (Iron Rule #6 surface), `scripts/demo-preflight.ts` checker, paste-ready social copy in `docs/runbooks/DEMO_SOCIAL_COPY.md`. Stacked on the Day 8 Session 2 branch.
+- **Day 9 (human)**: Record 90-second demo via `DEMO_VIDEO_SCRIPT.md`. Run `bun run scripts/demo-preflight.ts --slug=demo-shopify-brand` first; only press record on PASS. Post Twitter + LinkedIn using `DEMO_SOCIAL_COPY.md`.
 - **Day 10**: First design partner onboarding. Wire credentials, real OAuth flow.
 
 ## Known limitations / Day-N+ TODOs
@@ -55,5 +56,8 @@ agent 22, metrics 32, connector-shopify 38, connector-stripe 13, connector-meta 
 
 ## Test count by package (Day 8 Session 2 end)
 scripts 19 passing + 1 DB-gated e2e skipped without DATABASE_URL (parse-args 7, scenario-maeve 3, synthesize-orders 5, synthesize-stripe 4; seed-demo-org e2e gated). All other packages unchanged from Day 7.
+
+## Test count by package (Day 9 end)
+scripts 23 (preflight-args 4 added). apps/app 12 (citation-parser 10 added). Everything else unchanged.
 
 Update this file at the end of every shipped day.
