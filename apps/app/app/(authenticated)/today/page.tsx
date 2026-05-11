@@ -43,15 +43,17 @@ import {
 } from "@/lib/format";
 import { harvestCitedIds } from "./components/citation-parser";
 import { GroundedSummary } from "./components/grounded-summary";
+import { SnapshotPill } from "./components/snapshot-pill";
 import {
   fetchCitationLookup,
   fetchTodayPageData,
+  type SnapshotLookupRow,
   type TodayDailyMetrics,
   type TodaySyncHealth,
 } from "./data";
 
 export const metadata: Metadata = {
-  title: "Today — AI CFO",
+  title: "Today",
   description: "Your daily snapshot.",
 };
 
@@ -99,9 +101,11 @@ const isSyncHealthy = (s: TodaySyncHealth): boolean => {
 const HeadlineCard = ({
   daily,
   prior7dAvg,
+  snapshotRow,
 }: {
   daily: TodayDailyMetrics;
   prior7dAvg: string | null;
+  snapshotRow: SnapshotLookupRow | null;
 }) => {
   const delta = computePctDelta(daily.revenueNet, prior7dAvg);
   const trend = trendOf(delta);
@@ -122,9 +126,7 @@ const HeadlineCard = ({
         </div>
       </CardHeader>
       <CardContent>
-        <p className="font-mono text-muted-foreground text-xs">
-          snapshot:{daily.snapshotId}
-        </p>
+        <SnapshotPill row={snapshotRow} snapshotId={daily.snapshotId} />
       </CardContent>
     </Card>
   );
@@ -184,14 +186,23 @@ const TodayPage = async () => {
   const data = await fetchTodayPageData(orgId);
 
   // Iron Rule #6 surface: harvest citation ids from the AI summary
-  // markdown and batch-fetch the underlying rows so the grounded
-  // citation pills can render hover popovers without an extra round-trip.
-  const citationIds = data.report
+  // markdown plus the headline snapshot id, then batch-fetch every
+  // underlying row in one query so the grounded citation pills can
+  // render hover popovers without an extra round-trip.
+  const reportIds = data.report
     ? harvestCitedIds(data.report.contentMd)
     : { snapshot: [], anomaly: [], flag: [], memory: [] };
-  const citationLookup = data.report
-    ? await fetchCitationLookup(orgId, citationIds)
-    : { snapshots: {}, anomalies: {}, flags: {} };
+  const allSnapshotIds = data.daily
+    ? Array.from(new Set([data.daily.snapshotId, ...reportIds.snapshot]))
+    : reportIds.snapshot;
+  const citationLookup =
+    data.report || data.daily
+      ? await fetchCitationLookup(orgId, {
+          snapshot: allSnapshotIds,
+          anomaly: reportIds.anomaly,
+          flag: reportIds.flag,
+        })
+      : { snapshots: {}, anomalies: {}, flags: {} };
 
   if (!data.daily) {
     return (
@@ -222,7 +233,11 @@ const TodayPage = async () => {
         </p>
       </header>
 
-      <HeadlineCard daily={daily} prior7dAvg={data.prior7dRevenueNetAvg} />
+      <HeadlineCard
+        daily={daily}
+        prior7dAvg={data.prior7dRevenueNetAvg}
+        snapshotRow={citationLookup.snapshots[daily.snapshotId] ?? null}
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <MetricTile

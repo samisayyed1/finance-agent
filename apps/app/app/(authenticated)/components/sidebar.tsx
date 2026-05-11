@@ -42,6 +42,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
+import { AppBrand } from "./app-brand";
 
 export interface SidebarAlertCounts {
   /** Number of unresolved `connection_alerts` rows (red dot if > 0). */
@@ -138,6 +139,7 @@ export const GlobalSidebar = ({
     <>
       <Sidebar collapsible="icon">
         <SidebarHeader>
+          <AppBrand />
           <OrganizationSwitcher
             afterCreateOrganizationUrl="/"
             afterSelectOrganizationUrl="/"

@@ -4,9 +4,9 @@
 
 ## Current state (last updated: 2026-05-12)
 - **Day shipped**: Day 8 Session 1 (demo seeder Phase 0+1+2) — merged to main as 0d0f459
-- **Day in flight**: Day 8 Session 2 — PR #10 OPEN, CI running; Day 9 — PR (this one) stacked on top
-- **Day in progress**: Day 9 (demo launch prep) — citation pills, preflight checker, social copy
-- **Cumulative real tests**: ~210+ passing (Day 9 adds 10 citation-parser + 4 preflight-args)
+- **Day in flight**: PR #10 (Day 8 Session 2) → PR #11 (Day 9 demo launch prep) → PR #12 (Day 9 Tier 1 polish) stacked.
+- **Day in progress**: Day 9 — Tier 1 polish (brand wordmark, page-title template, AI-CFO marketing hero, headline snapshot pill).
+- **Cumulative real tests**: ~210+ passing
 - **Pages live**: /today, /metrics, /analyst, /exports, /settings/{connections,reconciliation,team}
 - **Connectors live**: Shopify (full), Stripe (full), Meta (fixture-tested, awaits creds), Google (fixture-tested, awaits creds), Slack (OAuth shipped)
 - **Closed loop**: pgvector memory + 4 Trigger.dev learning jobs, agent_traces written on every run
@@ -58,6 +58,6 @@ agent 22, metrics 32, connector-shopify 38, connector-stripe 13, connector-meta 
 scripts 19 passing + 1 DB-gated e2e skipped without DATABASE_URL (parse-args 7, scenario-maeve 3, synthesize-orders 5, synthesize-stripe 4; seed-demo-org e2e gated). All other packages unchanged from Day 7.
 
 ## Test count by package (Day 9 end)
-scripts 23 (preflight-args 4 added). apps/app 12 (citation-parser 10 added). Everything else unchanged.
+scripts 23 (preflight-args 4 added). apps/app 12 (citation-parser 10 added). Everything else unchanged. Tier 1 polish ship was zero net tests (UI presentation only; the SnapshotPill / headline-card pill exercise the same parser + lookup path the citation-pills already cover).
 
 Update this file at the end of every shipped day.
