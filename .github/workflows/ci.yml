@@ -15,6 +15,11 @@ jobs:
     name: lint + typecheck + test + eval
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_AGENT_MODEL: ${{ secrets.ANTHROPIC_AGENT_MODEL || 'claude-opus-4-7' }}
     steps:
       - uses: actions/checkout@v4
 
