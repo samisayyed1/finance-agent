@@ -112,43 +112,60 @@ Workflow:
 
 If `--with-agent-runs` is set this session: log `Skipping agent runs (deferred to next session)` and do not invoke the agent.
 
-### Phase Gate Marker: **SESSION 1 STOPS HERE**
+### Phase Gate Marker: **SESSION 1 ENDED AT PR #8 (commit 0d0f459)**
 
-Phase 3+ deferred to next session. WIP PR opened at end of Phase 2.
+Phases 4-8 below land in Session 2 (this PR).
 
-### Phase 3 — Verify + commit + open WIP PR (this session, end of Phase 2 work)
+### Phase 3 — Verify + commit + open WIP PR ✅ DONE (Session 1, PR #8)
 
-`bun install` → typecheck → lint → test (all green) → live one-day E2E
-against Supabase → push branch → `gh pr create` (no auto-merge).
+`bun install` → typecheck → lint → test (all green) → push branch →
+`gh pr create`. Shipped at commit `0d0f459`.
 
-### Phase 4 — Agent runs (next session)
+### Phase 4 — Agent runs ✅ DONE (Session 2)
 
-Wire `--with-agent-runs` to call `createAgent({ orgId, ... }).run({ date })`
-for each of the 90 days. Each run writes one `agent_traces` row +
-optionally `reports`. Skipped this session.
+`--with-agent-runs` now invokes `createAgent({...}).run({date})` once per
+seeded day via `scripts/seed/agent-run-for-day.ts`. Each run writes an
+`agent_traces` row (via the agent runtime's built-in persistence) plus an
+idempotent `reports` row scoped by `(org_id, date)`. Requires
+`MCP_SERVER_URL` and `ANTHROPIC_API_KEY` to be exported; orchestrator
+throws early if either is missing when the flag is set.
 
-### Phase 5 — Memories (next session)
+### Phase 5 — Memories ✅ DONE (Session 2)
 
-After agent runs, derive `agent_memories` from traces (existing
-`@ai-cfo/learning/jobs/write-memories-from-traces`) so /analyst chat has
-substrate to retrieve.
+After agent runs complete, the orchestrator makes a single
+`writeMemoriesFromTracesForOrg(orgId, orgName, window.start, deps)` call
+covering the full seeded window. Uses `createAnthropicDistiller()`.
+Memory write/drop counts surface in the final printable summary.
 
-### Phase 6 — Closed-loop snapshots (next session)
+### Phase 6 — Closed-loop snapshots ✅ DONE (Session 2)
 
-For each seeded day, run `measureClosedLoop(orgId, day)` so
-`closed_loop_metrics` populates and the per-org-loop dashboard renders.
+Per seeded day, the orchestrator calls
+`measureClosedLoopForOrg(orgId, since, asOfDate)` with
+`since = day - 24h` so each row's 24h window mirrors production cadence.
+Only fires when `--with-agent-runs` is set (otherwise traces are empty
+and the row would be uninformative).
 
-### Phase 7 — Tests (next session)
+### Phase 7 — Tests ✅ DONE (Session 2)
 
-End-to-end test under `scripts/seed/tests/seed-demo-org.test.ts` that
-exercises the orchestrator against a temp Postgres (or a transactional
-rollback against the real DB) covering: idempotent re-run, `--reset` clears
-all 19 tables, deterministic seed produces same row counts.
+- `scripts/seed/parse-args.ts` extracted from the orchestrator and given
+  a 7-test unit suite at `scripts/seed/tests/parse-args.test.ts` (covers
+  defaults, required `--slug`, all flags, integer validation,
+  forward-compat for unknown flags, hyphenated slugs).
+- DB-gated e2e suite at `scripts/seed/tests/seed-demo-org.test.ts` uses
+  dynamic `import("@ai-cfo/database")` inside `describe.skipIf` so it
+  cleanly SKIPS without DATABASE_URL rather than crashing on module
+  load. When DATABASE_URL is set it covers: deterministic seed → positive
+  row counts, idempotent re-run via onConflictDoNothing, four data
+  source connections populated.
+- Orchestrator entry-point guarded by `import.meta.main` so tests can
+  `await import("../../seed-demo-org")` without firing the CLI.
 
-### Phase 8 — Docs + demo video script (next session)
+### Phase 8 — Docs ✅ DONE (Session 2)
 
-`docs/runbooks/DEMO_VIDEO_SCRIPT.md` written from the seeded scenario.
-README updated with `bun run scripts/seed-demo-org.ts --slug=…` quickstart.
+- `docs/runbooks/DEMO_VIDEO_SCRIPT.md` — 90-second loom storyboard,
+  six beats, pre-flight checklist, failure-recovery notes.
+- README updated with the seed quickstart and `--with-agent-runs` note.
+- `docs/STATUS.md` updated with Day 8 Session 2 ship + new test counts.
 
 ## Constraints (echo of Iron Rules; full list in CLAUDE.md)
 
