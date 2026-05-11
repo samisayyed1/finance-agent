@@ -1,65 +1,71 @@
-import {
-  database,
-  eq,
-  orders,
-  organizations,
-  payments,
-  reconciliationFlags,
-} from "@ai-cfo/database";
+/**
+ * Integration test for runReconciliation against a live Supabase.
+ *
+ * Gated on DATABASE_URL: the suite skips cleanly when the env var is
+ * unset. `@ai-cfo/database` + `../src/run-reconciliation` are loaded
+ * dynamically inside `beforeAll` so the file doesn't crash at module
+ * load when DATABASE_URL is absent (the env validator inside
+ * @ai-cfo/database throws eagerly).
+ */
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runReconciliation } from "../src/run-reconciliation";
 
 const SLUG = `test-reconcile-${Date.now()}`;
-let orgId: string;
-
 const skipIfNoDb = !process.env.DATABASE_URL;
 
-const insertOrder = async (o: {
-  sourceOrderId: string;
-  total: string;
-  createdAt: Date;
-}): Promise<void> => {
-  await database.insert(orders).values({
-    orgId,
-    source: "shopify",
-    sourceOrderId: o.sourceOrderId,
-    currency: "USD",
-    subtotal: o.total,
-    total: o.total,
-    financialStatus: "paid",
-    createdAtSource: o.createdAt,
-  });
-};
-
-const insertPayment = async (p: {
-  sourcePaymentId: string;
-  grossAmount: string;
-  feeAmount?: string;
-  processedAt: Date;
-}): Promise<void> => {
-  const fee = p.feeAmount ?? "0.00";
-  const grossMinor = Math.round(Number(p.grossAmount) * 100);
-  const feeMinor = Math.round(Number(fee) * 100);
-  const netMinor = grossMinor - feeMinor;
-  await database.insert(payments).values({
-    orgId,
-    source: "stripe",
-    sourcePaymentId: p.sourcePaymentId,
-    grossAmount: p.grossAmount,
-    feeAmount: fee,
-    netAmount: (netMinor / 100).toFixed(2),
-    currency: "USD",
-    status: "succeeded",
-    processedAt: p.processedAt,
-  });
-};
-
 describe.skipIf(skipIfNoDb)("runReconciliation against live Supabase", () => {
+  let db: typeof import("@ai-cfo/database");
+  let recon: typeof import("../src/run-reconciliation");
+  let orgId: string;
+
+  const insertOrder = async (o: {
+    sourceOrderId: string;
+    total: string;
+    createdAt: Date;
+  }): Promise<void> => {
+    await db.database.insert(db.orders).values({
+      orgId,
+      source: "shopify",
+      sourceOrderId: o.sourceOrderId,
+      currency: "USD",
+      subtotal: o.total,
+      total: o.total,
+      financialStatus: "paid",
+      createdAtSource: o.createdAt,
+    });
+  };
+
+  const insertPayment = async (p: {
+    sourcePaymentId: string;
+    grossAmount: string;
+    feeAmount?: string;
+    processedAt: Date;
+  }): Promise<void> => {
+    const fee = p.feeAmount ?? "0.00";
+    const grossMinor = Math.round(Number(p.grossAmount) * 100);
+    const feeMinor = Math.round(Number(fee) * 100);
+    const netMinor = grossMinor - feeMinor;
+    await db.database.insert(db.payments).values({
+      orgId,
+      source: "stripe",
+      sourcePaymentId: p.sourcePaymentId,
+      grossAmount: p.grossAmount,
+      feeAmount: fee,
+      netAmount: (netMinor / 100).toFixed(2),
+      currency: "USD",
+      status: "succeeded",
+      processedAt: p.processedAt,
+    });
+  };
+
   beforeAll(async () => {
-    const inserted = await database
-      .insert(organizations)
+    db = await import("@ai-cfo/database");
+    recon = await import("../src/run-reconciliation");
+
+    const inserted = await db.database
+      .insert(db.organizations)
       .values({ name: "test-reconcile", slug: SLUG })
-      .returning({ id: organizations.id });
+      .returning({ id: db.organizations.id });
     const row = inserted[0];
     if (!row) {
       throw new Error("failed to create test org");
@@ -69,12 +75,14 @@ describe.skipIf(skipIfNoDb)("runReconciliation against live Supabase", () => {
 
   afterAll(async () => {
     if (orgId) {
-      await database.delete(organizations).where(eq(organizations.id, orgId));
+      await db.database
+        .delete(db.organizations)
+        .where(db.eq(db.organizations.id, orgId));
     }
   });
 
   it("empty window → 0 flags", async () => {
-    const result = await runReconciliation(orgId, {
+    const result = await recon.runReconciliation(orgId, {
       start: new Date("2030-01-01T00:00:00Z"),
       end: new Date("2030-01-02T00:00:00Z"),
     });
@@ -104,19 +112,19 @@ describe.skipIf(skipIfNoDb)("runReconciliation against live Supabase", () => {
       });
     }
 
-    const r1 = await runReconciliation(orgId, window);
+    const r1 = await recon.runReconciliation(orgId, window);
     expect(r1.matched).toBe(4);
     expect(r1.orderMissingPayment).toBe(1);
     expect(r1.paymentWithoutOrder).toBe(0);
 
     // Re-run: idempotent — same flag count, no duplicates.
-    const r2 = await runReconciliation(orgId, window);
+    const r2 = await recon.runReconciliation(orgId, window);
     expect(r2.orderMissingPayment).toBe(1);
 
-    const flagsForThisDay = await database
+    const flagsForThisDay = await db.database
       .select()
-      .from(reconciliationFlags)
-      .where(eq(reconciliationFlags.orgId, orgId));
+      .from(db.reconciliationFlags)
+      .where(db.eq(db.reconciliationFlags.orgId, orgId));
     const missing = flagsForThisDay.filter(
       (f) => f.kind === "ORDER_MISSING_PAYMENT"
     );
@@ -144,14 +152,14 @@ describe.skipIf(skipIfNoDb)("runReconciliation against live Supabase", () => {
       });
     }
 
-    const r = await runReconciliation(orgId, window);
+    const r = await recon.runReconciliation(orgId, window);
     expect(r.matched).toBe(4);
     expect(r.paymentWithoutOrder).toBe(1);
 
-    const flagsAll = await database
+    const flagsAll = await db.database
       .select()
-      .from(reconciliationFlags)
-      .where(eq(reconciliationFlags.orgId, orgId));
+      .from(db.reconciliationFlags)
+      .where(db.eq(db.reconciliationFlags.orgId, orgId));
     const noOrder = flagsAll.filter((f) => f.kind === "PAYMENT_WITHOUT_ORDER");
     expect(noOrder.length).toBeGreaterThanOrEqual(1);
   });
