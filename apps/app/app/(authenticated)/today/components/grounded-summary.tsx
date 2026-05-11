@@ -23,12 +23,8 @@ import {
   HoverCardTrigger,
 } from "@ai-cfo/design-system/components/ui/hover-card";
 import { cn } from "@ai-cfo/design-system/lib/utils";
-import type {
-  AnomalyLookupRow,
-  CitationLookup,
-  FlagLookupRow,
-  SnapshotLookupRow,
-} from "../data";
+import type { CitationLookup } from "../data";
+import { AnomalyCard, FlagCard, SnapshotCard } from "./citation-cards";
 import type { CitationSegment, Segment } from "./citation-parser";
 import { parseCitations } from "./citation-parser";
 
@@ -52,85 +48,6 @@ const labelOf = (seg: CitationSegment): string => {
   }
   return "mem";
 };
-
-const SnapshotCard = ({ row }: { row: SnapshotLookupRow }) => (
-  <div className="space-y-1 text-sm">
-    <p className="font-medium">Daily snapshot · {row.date}</p>
-    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground text-xs">
-      {row.revenueNet ? (
-        <>
-          <dt>Revenue net</dt>
-          <dd className="text-right font-mono text-foreground">
-            {row.revenueNet}
-          </dd>
-        </>
-      ) : null}
-      {row.revenueGross ? (
-        <>
-          <dt>Revenue gross</dt>
-          <dd className="text-right font-mono text-foreground">
-            {row.revenueGross}
-          </dd>
-        </>
-      ) : null}
-      {row.roas ? (
-        <>
-          <dt>ROAS</dt>
-          <dd className="text-right font-mono text-foreground">{row.roas}</dd>
-        </>
-      ) : null}
-      {row.orders !== null ? (
-        <>
-          <dt>Orders</dt>
-          <dd className="text-right font-mono text-foreground">{row.orders}</dd>
-        </>
-      ) : null}
-    </dl>
-    <p className="pt-1 font-mono text-[10px] text-muted-foreground">
-      snapshot:{row.snapshotId}
-    </p>
-  </div>
-);
-
-const AnomalyCard = ({ row }: { row: AnomalyLookupRow }) => (
-  <div className="space-y-1 text-sm">
-    <p className="font-medium">
-      Anomaly · {row.metric} · {row.severity}
-    </p>
-    <p className="text-muted-foreground text-xs">Date: {row.date}</p>
-    {row.value ? (
-      <p className="text-muted-foreground text-xs">
-        Current value:{" "}
-        <span className="font-mono text-foreground">{row.value}</span>
-      </p>
-    ) : null}
-    {row.suggestedCause ? (
-      <p className="pt-1 text-foreground text-xs">{row.suggestedCause}</p>
-    ) : null}
-    <p className="pt-1 font-mono text-[10px] text-muted-foreground">
-      anomaly:{row.anomalyId}
-    </p>
-  </div>
-);
-
-const FlagCard = ({ row }: { row: FlagLookupRow }) => (
-  <div className="space-y-1 text-sm">
-    <p className="font-medium">
-      {row.kind} · {row.status}
-    </p>
-    {row.delta ? (
-      <p className="text-muted-foreground text-xs">
-        Δ <span className="font-mono text-foreground">{row.delta}</span>
-      </p>
-    ) : null}
-    <p className="text-muted-foreground text-xs">
-      Opened: {row.createdAt.toISOString().slice(0, 10)}
-    </p>
-    <p className="pt-1 font-mono text-[10px] text-muted-foreground">
-      flag:{row.flagId}
-    </p>
-  </div>
-);
 
 interface CitationPillProps {
   lookup: CitationLookup;
