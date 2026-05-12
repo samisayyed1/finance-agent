@@ -13,7 +13,6 @@
     "@arcjet/next": "1.2.0",
     "@radix-ui/react-icons": "^1.3.2",
     "@ai-cfo/analytics": "workspace:*",
-    "@ai-cfo/cms": "workspace:*",
     "@ai-cfo/design-system": "workspace:*",
     "@ai-cfo/email": "workspace:*",
     "@ai-cfo/feature-flags": "workspace:*",

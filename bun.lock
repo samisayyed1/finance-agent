@@ -181,7 +181,6 @@
       "name": "web",
       "dependencies": {
         "@ai-cfo/analytics": "workspace:*",
-        "@ai-cfo/cms": "workspace:*",
         "@ai-cfo/design-system": "workspace:*",
         "@ai-cfo/email": "workspace:*",
         "@ai-cfo/feature-flags": "workspace:*",
