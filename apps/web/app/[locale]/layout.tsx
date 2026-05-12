@@ -1,6 +1,5 @@
 import "./styles.css";
 import { AnalyticsProvider } from "@ai-cfo/analytics/provider";
-import { Toolbar as CMSToolbar } from "@ai-cfo/cms/components/toolbar";
 import { DesignSystemProvider } from "@ai-cfo/design-system";
 import { fonts } from "@ai-cfo/design-system/lib/fonts";
 import { cn } from "@ai-cfo/design-system/lib/utils";
@@ -35,7 +34,6 @@ const RootLayout = async ({ children, params }: RootLayoutProperties) => {
             <Footer />
           </DesignSystemProvider>
           <Toolbar />
-          <CMSToolbar />
         </AnalyticsProvider>
       </body>
     </html>

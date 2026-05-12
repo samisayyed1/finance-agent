@@ -24,8 +24,11 @@ interface RootLayoutProperties {
 }
 
 const RootLayout = ({ children }: RootLayoutProperties) => (
-  <html className={fonts} lang="en" suppressHydrationWarning>
-    <body>
+  // Day-11 Cockpit: dark mode is the product. The `dark` class on <html>
+  // turns on Tailwind's dark-mode tokens globally; light mode is a
+  // toggle-target for Day-N+ but not the design default.
+  <html className={`${fonts} dark`} lang="en" suppressHydrationWarning>
+    <body className="bg-[#131316]">
       <AnalyticsProvider>
         <DesignSystemProvider
           helpUrl={env.NEXT_PUBLIC_DOCS_URL}

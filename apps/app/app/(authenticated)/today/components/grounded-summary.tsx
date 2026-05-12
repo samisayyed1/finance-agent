@@ -33,8 +33,12 @@ interface GroundedSummaryProps {
   markdown: string;
 }
 
+// Day-11 Stitch receipt-pill spec: a typographically considered inline
+// component, NOT a hyperlink. 22px tall, 6px radius (slight round, not
+// full pill — full-pill inline reads cheap), 1px hairline border at 8%,
+// background at 4% surface tint, JetBrains Mono medium 12px, tabular-nums.
 const CITATION_PILL_CLASS =
-  "inline-flex items-center rounded-full border bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:bg-muted/80 hover:text-foreground cursor-help";
+  "inline-flex h-[22px] items-baseline rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 align-baseline font-mono font-medium text-[12px] text-zinc-100 tabular-nums leading-[20px] cursor-help transition-colors hover:border-white/[0.16] hover:bg-white/[0.08]";
 
 const labelOf = (seg: CitationSegment): string => {
   if (seg.citationKind === "snapshot") {
@@ -104,9 +108,12 @@ const renderSegment = (seg: Segment, i: number, lookup: CitationLookup) => {
 
 export const GroundedSummary = ({ markdown, lookup }: GroundedSummaryProps) => {
   const segments = parseCitations(markdown);
+  // Day-11 Stitch port: rendered as a typeset paragraph (Inter Display
+  // 15px / line-height 1.7) — NOT a preformatted block. The parent
+  // controls font, this just preserves the segment order.
   return (
-    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+    <p className="text-inherit">
       {segments.map((seg, i) => renderSegment(seg, i, lookup))}
-    </pre>
+    </p>
   );
 };
