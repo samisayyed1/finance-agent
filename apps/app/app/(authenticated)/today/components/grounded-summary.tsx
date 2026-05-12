@@ -23,10 +23,12 @@ import {
   HoverCardTrigger,
 } from "@ai-cfo/design-system/components/ui/hover-card";
 import { cn } from "@ai-cfo/design-system/lib/utils";
+import { useState } from "react";
 import type { CitationLookup } from "../data";
 import { AnomalyCard, FlagCard, SnapshotCard } from "./citation-cards";
 import type { CitationSegment, Segment } from "./citation-parser";
 import { parseCitations } from "./citation-parser";
+import { ReceiptDrawer } from "./receipt-drawer";
 
 interface GroundedSummaryProps {
   lookup: CitationLookup;
@@ -55,10 +57,11 @@ const labelOf = (seg: CitationSegment): string => {
 
 interface CitationPillProps {
   lookup: CitationLookup;
+  onOpenReceipt: (seg: CitationSegment) => void;
   seg: CitationSegment;
 }
 
-const CitationPill = ({ seg, lookup }: CitationPillProps) => {
+const CitationPill = ({ seg, lookup, onOpenReceipt }: CitationPillProps) => {
   let body: React.ReactNode = null;
   if (seg.citationKind === "snapshot") {
     const row = lookup.snapshots[seg.id];
@@ -88,7 +91,11 @@ const CitationPill = ({ seg, lookup }: CitationPillProps) => {
   return (
     <HoverCard closeDelay={120} openDelay={120}>
       <HoverCardTrigger asChild>
-        <button className={cn(CITATION_PILL_CLASS)} type="button">
+        <button
+          className={cn(CITATION_PILL_CLASS)}
+          onClick={() => onOpenReceipt(seg)}
+          type="button"
+        >
           {labelOf(seg)}
         </button>
       </HoverCardTrigger>
@@ -99,21 +106,61 @@ const CitationPill = ({ seg, lookup }: CitationPillProps) => {
   );
 };
 
-const renderSegment = (seg: Segment, i: number, lookup: CitationLookup) => {
+const renderSegment = (
+  seg: Segment,
+  i: number,
+  lookup: CitationLookup,
+  onOpenReceipt: (seg: CitationSegment) => void
+) => {
   if (seg.kind === "text") {
     return <span key={`t-${i}`}>{seg.text}</span>;
   }
-  return <CitationPill key={`c-${i}-${seg.raw}`} lookup={lookup} seg={seg} />;
+  return (
+    <CitationPill
+      key={`c-${i}-${seg.raw}`}
+      lookup={lookup}
+      onOpenReceipt={onOpenReceipt}
+      seg={seg}
+    />
+  );
 };
 
 export const GroundedSummary = ({ markdown, lookup }: GroundedSummaryProps) => {
   const segments = parseCitations(markdown);
-  // Day-11 Stitch port: rendered as a typeset paragraph (Inter Display
-  // 15px / line-height 1.7) — NOT a preformatted block. The parent
-  // controls font, this just preserves the segment order.
+  const [openSeg, setOpenSeg] = useState<CitationSegment | null>(null);
+
+  // Build a friendly title for the receipt drawer from the citation kind.
+  // For Day-12 we surface the segment's raw monetary token if one is
+  // available adjacent to it; otherwise we fall back to a generic label.
+  const drawerTitle = (() => {
+    if (!openSeg) {
+      return "Receipt";
+    }
+    if (openSeg.citationKind === "snapshot") {
+      const row = lookup.snapshots[openSeg.id];
+      return row?.revenueNet ?? row?.revenueGross ?? "$0.00";
+    }
+    if (openSeg.citationKind === "flag") {
+      const row = lookup.flags[openSeg.id];
+      return row?.delta ?? `Flag · ${openSeg.id.slice(0, 8)}`;
+    }
+    if (openSeg.citationKind === "anomaly") {
+      const row = lookup.anomalies[openSeg.id];
+      return row?.value ?? `Anomaly · ${openSeg.id.slice(0, 8)}`;
+    }
+    return openSeg.id;
+  })();
+
   return (
-    <p className="text-inherit">
-      {segments.map((seg, i) => renderSegment(seg, i, lookup))}
-    </p>
+    <>
+      <p className="text-inherit">
+        {segments.map((seg, i) => renderSegment(seg, i, lookup, setOpenSeg))}
+      </p>
+      <ReceiptDrawer
+        onClose={() => setOpenSeg(null)}
+        open={openSeg !== null}
+        title={drawerTitle}
+      />
+    </>
   );
 };

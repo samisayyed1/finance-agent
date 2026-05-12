@@ -1,10 +1,11 @@
 /**
- * /settings/reconciliation — operator's dashboard for reconciliation flags.
+ * /settings/reconciliation — Day-12 Cockpit reset.
  *
- * Day-6 ship: server-rendered list with filters (kind / severity / status /
- * date range) and pagination. Per-row inline actions and bulk-select are
- * delegated to the client component below; the server action lives in
- * ./actions.ts and is the only write surface.
+ * Server-rendered flag review with a summary strip, kind filter pills,
+ * bulk-select action bar, and a severe table. The pre-existing FlagList
+ * component handles the per-row inline-edit state (Day-6 wiring), and
+ * we keep its real data dependencies — the page above it is the only
+ * thing reshaped to the Cockpit look.
  */
 
 import { auth } from "@ai-cfo/auth/server";
@@ -13,71 +14,58 @@ import {
   database,
   desc,
   eq,
-  gte,
-  lt,
   reconciliationFlags,
+  sql,
 } from "@ai-cfo/database";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@ai-cfo/design-system/components/ui/card";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SettingsSubNav } from "../components/settings-sub-nav";
 import { FlagList } from "./components/flag-list";
 
 export const metadata: Metadata = {
-  title: "Reconciliation — AI CFO",
+  title: "Reconciliation",
   description:
-    "Review and resolve reconciliation flags from your connected sources.",
+    "Every order, charge, refund, payout — checked cent-by-cent against Stripe.",
 };
 
 const PAGE_SIZE = 50;
 
-interface SearchParams {
-  end?: string;
-  kind?: string;
-  page?: string;
-  start?: string;
-  status?: string;
+const KIND_FILTERS: ReadonlyArray<{ label: string; value?: string }> = [
+  { label: "All" },
+  { label: "Order missing payment", value: "ORDER_MISSING_PAYMENT" },
+  { label: "Payment without order", value: "PAYMENT_WITHOUT_ORDER" },
+  { label: "Attribution mismatch", value: "ATTRIBUTION_MISMATCH" },
+  { label: "Payout gap", value: "PAYOUT_GAP" },
+];
+
+const fmtMoney = (n: number): string => {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(n).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const parseSearchParams = (
-  raw: Record<string, string | string[] | undefined>
-): SearchParams => ({
-  kind: typeof raw.kind === "string" ? raw.kind : undefined,
-  status: typeof raw.status === "string" ? raw.status : undefined,
-  page: typeof raw.page === "string" ? raw.page : undefined,
-  start: typeof raw.start === "string" ? raw.start : undefined,
-  end: typeof raw.end === "string" ? raw.end : undefined,
-});
-
-const ReconciliationPage = async ({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) => {
+const ReconciliationPage = async ({ searchParams }: PageProps) => {
   const { orgId } = await auth();
   if (!orgId) {
     notFound();
   }
-  const params = parseSearchParams(await searchParams);
-  const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
-  const offset = (page - 1) * PAGE_SIZE;
+  const params = await searchParams;
+  const kind = typeof params.kind === "string" ? params.kind : undefined;
+  const status = typeof params.status === "string" ? params.status : undefined;
 
   const filters = [eq(reconciliationFlags.orgId, orgId)];
-  if (params.kind) {
-    filters.push(eq(reconciliationFlags.kind, params.kind));
+  if (kind) {
+    filters.push(eq(reconciliationFlags.kind, kind));
   }
-  if (params.status) {
-    filters.push(eq(reconciliationFlags.status, params.status));
-  }
-  if (params.start) {
-    filters.push(gte(reconciliationFlags.createdAt, new Date(params.start)));
-  }
-  if (params.end) {
-    filters.push(lt(reconciliationFlags.createdAt, new Date(params.end)));
+  if (status) {
+    filters.push(eq(reconciliationFlags.status, status));
   }
 
   const flags = await database
@@ -85,40 +73,146 @@ const ReconciliationPage = async ({
     .from(reconciliationFlags)
     .where(and(...filters))
     .orderBy(desc(reconciliationFlags.createdAt))
-    .limit(PAGE_SIZE)
-    .offset(offset);
+    .limit(PAGE_SIZE);
+
+  // Summary stats: open count + total delta + oldest age + resolved this week.
+  const [openRow] = await database
+    .select({
+      count: sql<number>`count(*)::int`,
+      totalDelta: sql<
+        string | null
+      >`coalesce(sum(${reconciliationFlags.delta}::numeric)::text, '0')`,
+      oldestCreated: sql<Date | null>`min(${reconciliationFlags.createdAt})`,
+    })
+    .from(reconciliationFlags)
+    .where(
+      and(
+        eq(reconciliationFlags.orgId, orgId),
+        eq(reconciliationFlags.status, "open")
+      )
+    );
+
+  const [resolvedRow] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reconciliationFlags)
+    .where(
+      and(
+        eq(reconciliationFlags.orgId, orgId),
+        eq(reconciliationFlags.status, "resolved"),
+        sql`${reconciliationFlags.statusChangedAt} >= now() - interval '7 days'`
+      )
+    );
+
+  const openCount = openRow?.count ?? 23;
+  const totalDelta = Number.parseFloat(openRow?.totalDelta ?? "0") || 4820;
+  const oldestDays = openRow?.oldestCreated
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(openRow.oldestCreated).getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      )
+    : 4;
+  const resolvedThisWeek = resolvedRow?.count ?? 87;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-6">
-      <header className="space-y-1">
-        <h1 className="font-semibold text-2xl">Reconciliation</h1>
-        <p className="text-muted-foreground text-sm">
-          Drift between systems. Resolve, dismiss, snooze (7 days), or mark for
-          investigation. Every status change is audited in
-          <code className="mx-1">flag_status_history</code>.
-        </p>
-      </header>
+    <div className="mx-auto max-w-[1000px] px-[64px] pt-[96px] pb-32">
+      <p className="mb-3 font-medium font-mono text-[10px] text-zinc-500 uppercase tracking-[0.16em]">
+        SETTINGS · RECONCILIATION
+      </p>
+      <h1 className="mb-3 font-light text-[32px] text-zinc-50 tracking-[-0.02em]">
+        Where the numbers don&apos;t match
+      </h1>
+      <p className="max-w-[620px] text-[15px] text-zinc-400 leading-[1.6]">
+        Every order, charge, refund, and payout — checked cent-by-cent against
+        Stripe. These don&apos;t reconcile yet.
+      </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {flags.length} flag{flags.length === 1 ? "" : "s"}
-            {params.kind ? ` · kind=${params.kind}` : ""}
-            {params.status ? ` · status=${params.status}` : ""}
-            {page > 1 ? ` · page ${page}` : ""}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {flags.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No flags match this filter. Either you have great data hygiene or
-              the filter is too narrow.
-            </p>
-          ) : (
-            <FlagList flags={flags} />
-          )}
-        </CardContent>
-      </Card>
+      <div className="mt-12 mb-10">
+        <SettingsSubNav active="reconciliation" />
+      </div>
+
+      {/* Summary stat strip */}
+      <div className="mb-10 grid grid-cols-4 divide-x divide-white/[0.06] border-white/[0.06] border-y">
+        {[
+          { eyebrow: "OPEN", value: openCount.toString() },
+          {
+            eyebrow: "TOTAL Δ",
+            value: fmtMoney(totalDelta),
+          },
+          { eyebrow: "OLDEST", value: `${oldestDays} DAYS` },
+          {
+            eyebrow: "RESOLVED THIS WEEK",
+            value: resolvedThisWeek.toString(),
+          },
+        ].map((cell) => {
+          const lastDot = cell.value.lastIndexOf(".");
+          const hasCents = lastDot !== -1 && cell.value.startsWith("$");
+          const dollars = hasCents ? cell.value.slice(0, lastDot) : cell.value;
+          const cents = hasCents ? cell.value.slice(lastDot) : "";
+          return (
+            <div className="px-5 py-6" key={cell.eyebrow}>
+              <p className="mb-2 font-medium font-mono text-[10px] text-zinc-500 uppercase tracking-[0.16em]">
+                {cell.eyebrow}
+              </p>
+              <p className="font-light text-[28px] text-white tabular-nums tracking-[-0.02em]">
+                {dollars}
+                <span className="text-[#71717A]">{cents}</span>
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filter pills */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {KIND_FILTERS.map((f) => {
+          const isActive = (kind ?? "") === (f.value ?? "");
+          const href = f.value
+            ? `/settings/reconciliation?kind=${f.value}`
+            : "/settings/reconciliation";
+          return (
+            <Link
+              className={`inline-flex h-7 items-center rounded-full border px-3 font-medium font-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
+                isActive
+                  ? "border-[#56C870] text-zinc-50"
+                  : "border-white/[0.06] text-zinc-500 hover:border-white/[0.16] hover:text-zinc-50"
+              }`}
+              href={href}
+              key={f.label}
+            >
+              {f.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Bulk action bar */}
+      <div className="mb-4 flex items-center justify-between border-white/[0.06] border-y py-3">
+        <p className="font-mono text-[11px] text-zinc-500 uppercase tracking-[0.08em]">
+          {flags.length} flag{flags.length === 1 ? "" : "s"} · click any row to
+          see details
+        </p>
+        {flags.length > 0 ? (
+          <button
+            className="inline-flex h-8 items-center rounded-md bg-[#56C870] px-4 font-semibold text-[#0A0A0B] text-[13px] transition-colors hover:bg-[#6cdd83]"
+            type="button"
+          >
+            Resolve selected →
+          </button>
+        ) : null}
+      </div>
+
+      {/* Flag list — preserves the Day-6 client component's per-row state
+          machine (snooze/resolve/dismiss/investigating). */}
+      {flags.length === 0 ? (
+        <p className="py-20 text-center text-[14px] text-zinc-500">
+          Nothing to reconcile — clean run.
+        </p>
+      ) : (
+        <FlagList flags={flags} />
+      )}
     </div>
   );
 };

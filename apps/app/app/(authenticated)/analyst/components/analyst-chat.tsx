@@ -244,7 +244,6 @@ export const AnalystChat = () => {
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[760px] space-y-8 px-8 pt-24 pb-40">
           {messages.map((msg, i) => {
-            // biome-ignore lint/suspicious/noArrayIndexKey: messages array is append-only and order-stable for the lifetime of the conversation; combining index + first 16 chars of content is sufficient to disambiguate React keys without dragging a uuid generator into a hot client path.
             const key = `${msg.role}-${i}-${msg.content.slice(0, 16)}`;
             return msg.role === "user" ? (
               <UserTurn content={msg.content} key={key} />
