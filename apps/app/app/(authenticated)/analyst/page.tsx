@@ -1,5 +1,7 @@
 /**
- * /analyst — browser chat with the operating CFO. Server shell.
+ * /analyst — Day-11 Cockpit shell. All chrome lives inside AnalystChat
+ * (the Stitch design centers its own header). The page is a thin
+ * server-component auth gate.
  */
 
 import { auth } from "@ai-cfo/auth/server";
@@ -8,8 +10,8 @@ import { redirect } from "next/navigation";
 import { AnalystChat } from "./components/analyst-chat";
 
 export const metadata: Metadata = {
-  title: "Analyst — AI CFO",
-  description: "Ask your CFO anything.",
+  title: "Ask",
+  description: "Ask your CFO anything. The answer cites every receipt.",
 };
 
 const AnalystPage = async () => {
@@ -17,18 +19,7 @@ const AnalystPage = async () => {
   if (!orgId) {
     redirect("/sign-in");
   }
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
-      <header>
-        <h1 className="font-semibold text-2xl">Ask your CFO anything</h1>
-        <p className="text-muted-foreground text-sm">
-          Conversational analyst. Cites every claim with a snapshot, flag,
-          anomaly, or memory id.
-        </p>
-      </header>
-      <AnalystChat />
-    </div>
-  );
+  return <AnalystChat />;
 };
 
 export default AnalystPage;
