@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && bun install --frozen-lockfile",
+  "buildCommand": "cd ../.. && bun --bun turbo run build --filter=api",
+  "outputDirectory": ".next",
   "ignoreCommand": "node scripts/skip-ci.js",
   "crons": [
     {

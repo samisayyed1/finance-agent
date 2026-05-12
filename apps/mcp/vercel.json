@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.x",
+  "installCommand": "cd ../.. && bun install --frozen-lockfile",
+  "buildCommand": "echo 'no build step; serverless functions in api/'",
+  "framework": null,
+  "outputDirectory": ".",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+}
