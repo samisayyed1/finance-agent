@@ -1,26 +1,21 @@
+/**
+ * Local-dev entry-point. Bun runs this directly via `bun --hot run ./src/server.ts`
+ * (see `package.json#scripts.dev`). Listens on `process.env.PORT ?? 4000`.
+ *
+ * The Vercel serverless deployment uses `api/index.ts` instead — that path
+ * imports the same `app` and exports `app.fetch` so Vercel's Node runtime
+ * can hand it requests directly.
+ *
+ * NOTE: do NOT add `export default app;` here. Bun auto-serves any
+ * default-exported Hono-shaped object on `process.env.PORT`, which
+ * conflicts with the explicit @hono/node-server listen below (EADDRINUSE).
+ * The bare `serve()` call is the authoritative listener for local dev.
+ */
+
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { handleMcpRequest } from "./hono-bridge";
+import { app } from "./app";
 import { logger } from "./logger";
-import { type McpEnv, requireBearer } from "./middleware";
-import { oauthRouter } from "./oauth";
-import { initObservability } from "./observability";
-
-initObservability();
-
-const app = new Hono<McpEnv>();
-
-app.get("/", (c) => c.json({ ok: true, service: "ai-cfo-mcp" }));
-app.route("/", oauthRouter);
-
-app.use("/mcp/*", requireBearer);
-app.all("/mcp", (c) => handleMcpRequest(c, { orgId: c.get("orgId") }));
 
 const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port });
 logger.info({ port }, "ai-cfo-mcp listening");
-
-// NOTE: do NOT add `export default app;` — Bun auto-serves any default-
-// exported Hono-shaped object on `process.env.PORT`, conflicting with the
-// explicit @hono/node-server listen above (EADDRINUSE). The bare `serve()`
-// call is the authoritative listener.
