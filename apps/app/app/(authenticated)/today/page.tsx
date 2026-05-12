@@ -38,8 +38,27 @@ export const metadata: Metadata = {
   description: "Your daily snapshot.",
 };
 
-const FALLBACK_BRIEFING =
-  "Yesterday was strong. $42,873.20 in net revenue, up 12% from your weekly average. But eight orders didn't get charged on Stripe — that's $1,847 sitting outstanding. And your Meta broad-audience campaign keeps slipping — ROAS dropped to 1.8× from 4.1×. I'd pause it.";
+/* --------------------------------------------------------------------- */
+/* SectionHeading — quiet, consistent. The hero is the only shout.        */
+/* --------------------------------------------------------------------- */
+
+const SectionHeading = ({ children }: { children: React.ReactNode }) => (
+  <h2 className="mb-6 font-medium text-[15px] text-zinc-100 tracking-tight">
+    {children}
+  </h2>
+);
+
+/* --------------------------------------------------------------------- */
+/* StaticReceiptPill — same visual as the grounded citation pill, but
+   without a lookup. Used in the fallback briefing so an empty-state
+   page still shows the typographic pattern.                              */
+/* --------------------------------------------------------------------- */
+
+const StaticReceiptPill = ({ children }: { children: React.ReactNode }) => (
+  <span className="inline-flex h-[22px] cursor-default items-baseline rounded-[6px] border border-white/[0.08] bg-white/[0.04] px-2 align-baseline font-medium font-mono text-[12px] text-zinc-100 tabular-nums leading-[20px]">
+    {children}
+  </span>
+);
 
 /* --------------------------------------------------------------------- */
 /* Hero — decimal desaturation is the defining detail.                   */
@@ -66,18 +85,43 @@ const HeroNumber = ({ value }: { value: string | null }) => {
   );
 };
 
+// Pretty date for the hero subline. Pure render — no timezone work yet
+// (Day-N+ pulls the org's local tz from org_settings; for now show UTC
+// labeled simply). Returns e.g. "Thursday, May 7".
+const formatPrettyDate = (iso: string | null | undefined): string => {
+  if (!iso) {
+    return "";
+  }
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+};
+
 const HeroBlock = ({ data }: { data: TodayPageData }) => {
   const delta = data.daily
     ? computePctDelta(data.daily.revenueNet, data.prior7dRevenueNetAvg)
     : null;
 
   return (
-    <div className="mb-[64px] pt-[96px]">
-      <p className="mb-4 font-mono text-[#71717A] text-[10px] tracking-[0.16em]">
-        YESTERDAY
-      </p>
+    // Day-11 polish: the hero is the only shout on the page. Everything
+    // around it is whispered. Bumped breathing room below to 88px so the
+    // briefing doesn't crowd the number.
+    <div className="mb-[88px] pt-[96px]">
+      <div className="mb-5 flex items-baseline gap-3">
+        <p className="font-mono text-[#71717A] text-[10px] tracking-[0.16em]">
+          YESTERDAY
+        </p>
+        <span className="text-[#52525B] text-[12px]">·</span>
+        <p className="text-[#A1A1AA] text-[13px]">
+          {formatPrettyDate(data.daily?.date)}
+        </p>
+      </div>
       <HeroNumber value={data.daily?.revenueNet ?? null} />
-      <div className="mt-6 mb-6 flex items-center gap-3">
+      <div className="mt-5 mb-3 flex items-center gap-3">
         <div className="flex items-center text-[#56C870]">
           <ArrowUpRightIcon className="mr-1 h-4 w-4" strokeWidth={1.75} />
           <span className="font-medium font-mono text-[13px]">
@@ -85,9 +129,7 @@ const HeroBlock = ({ data }: { data: TodayPageData }) => {
           </span>
         </div>
         <div className="h-4 w-px bg-white/10" />
-        <span className="text-[13px] text-zinc-400">
-          vs your last seven days
-        </span>
+        <span className="text-[13px] text-zinc-400">vs your 7-day average</span>
       </div>
       <div className="flex items-center gap-2">
         <ShieldCheckIcon
@@ -95,7 +137,7 @@ const HeroBlock = ({ data }: { data: TodayPageData }) => {
           strokeWidth={1.75}
         />
         <p className="text-[#56C870] text-[13px]">
-          We checked every cent against Stripe&apos;s records.
+          Every cent verified against Stripe.
         </p>
       </div>
     </div>
@@ -120,11 +162,9 @@ const BriefingSection = async ({
     flag: ids.flag,
   });
   return (
-    <section className="mb-[64px]">
-      <h2 className="mb-6 font-medium text-[22px] text-zinc-50 tracking-tight">
-        Today, in plain English
-      </h2>
-      <div className="max-w-[640px] text-[15px] text-zinc-300 leading-[1.7]">
+    <section className="mb-[88px]">
+      <SectionHeading>Today, in plain English</SectionHeading>
+      <div className="max-w-[640px] text-[15px] text-zinc-300 leading-[1.75]">
         <GroundedSummary lookup={lookup} markdown={contentMd} />
       </div>
     </section>
@@ -132,12 +172,16 @@ const BriefingSection = async ({
 };
 
 const BriefingFallback = () => (
-  <section className="mb-[64px]">
-    <h2 className="mb-6 font-medium text-[22px] text-zinc-50 tracking-tight">
-      Today, in plain English
-    </h2>
-    <p className="max-w-[640px] text-[15px] text-zinc-300 leading-[1.7]">
-      {FALLBACK_BRIEFING}
+  <section className="mb-[88px]">
+    <SectionHeading>Today, in plain English</SectionHeading>
+    <p className="max-w-[640px] text-[15px] text-zinc-300 leading-[1.75]">
+      Yesterday was strong. <StaticReceiptPill>$42,873.20</StaticReceiptPill> in
+      net revenue, up <StaticReceiptPill>12%</StaticReceiptPill> from your
+      weekly average. But eight orders didn&apos;t get charged on Stripe —
+      that&apos;s <StaticReceiptPill>$1,847</StaticReceiptPill> sitting
+      outstanding. And your Meta broad-audience campaign keeps slipping — ROAS
+      dropped to <StaticReceiptPill>1.8×</StaticReceiptPill> from{" "}
+      <StaticReceiptPill>4.1×</StaticReceiptPill>. I&apos;d pause it.
     </p>
   </section>
 );
@@ -160,7 +204,10 @@ interface AttentionCardSpec {
 const AttentionCard = ({ spec }: { spec: AttentionCardSpec }) => {
   const Icon = spec.icon;
   return (
-    <div className="flex h-[88px] items-center justify-between rounded-lg border border-white/[0.06] bg-[#111114] px-6 transition-colors duration-150 hover:border-white/[0.12]">
+    // Day-11 polish: bumped to 96px so the icon + 2-line text never crowds
+    // its own card. Hairline borders only — no shadows. The hover lift on
+    // the border is the entire interaction language.
+    <div className="flex h-[96px] items-center justify-between rounded-lg border border-white/[0.06] bg-[#111114] px-6 transition-colors duration-150 hover:border-white/[0.12]">
       <div className="flex items-center gap-4">
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-full border ${spec.iconBorder} ${spec.iconBg}`}
@@ -168,7 +215,9 @@ const AttentionCard = ({ spec }: { spec: AttentionCardSpec }) => {
           <Icon className={`h-5 w-5 ${spec.iconTint}`} strokeWidth={1.75} />
         </div>
         <div>
-          <p className="font-medium text-[14px] text-white">{spec.title}</p>
+          <p className="font-medium text-[14px] text-white tracking-tight">
+            {spec.title}
+          </p>
           <p className="mt-1 text-[13px] text-zinc-400">{spec.detail}</p>
         </div>
       </div>
@@ -254,10 +303,8 @@ const AttentionSection = ({ data }: { data: TodayPageData }) => {
   const cards = buildAttentionCards(data);
 
   return (
-    <section className="mb-[64px]">
-      <h2 className="mb-6 font-medium text-[22px] text-zinc-50 tracking-tight">
-        Needs your attention
-      </h2>
+    <section className="mb-[88px]">
+      <SectionHeading>Needs your attention</SectionHeading>
       <div className="flex flex-col gap-2">
         {cards.map((c) => (
           <AttentionCard key={c.title} spec={c} />
@@ -284,17 +331,15 @@ const CHANNELS: Array<{
 ];
 
 const ChannelsSection = () => (
-  <section className="mb-[64px]">
-    <h2 className="mb-6 font-medium text-[22px] text-zinc-50 tracking-tight">
-      Where your sales came from
-    </h2>
+  <section className="mb-[88px]">
+    <SectionHeading>Where your sales came from</SectionHeading>
     <div className="flex w-full flex-col">
       {CHANNELS.map((c) => (
         <div
-          className="flex h-[40px] items-center border-white/[0.06] border-b"
+          className="flex h-[44px] items-center border-white/[0.05] border-b last:border-b-0"
           key={c.name}
         >
-          <span className="w-[120px] text-[13px] text-zinc-200">{c.name}</span>
+          <span className="w-[140px] text-[13px] text-zinc-200">{c.name}</span>
           <div className="flex flex-1 items-center px-4">
             <div
               className="h-px bg-[#56C870]"
@@ -302,7 +347,7 @@ const ChannelsSection = () => (
             />
           </div>
           <div className="flex w-[160px] items-center justify-end gap-4">
-            <span className="font-mono text-[12px] text-zinc-400 tabular-nums">
+            <span className="font-mono text-[12px] text-zinc-500 tabular-nums">
               {c.pct.toFixed(1)}%
             </span>
             <span className="font-mono text-[13px] text-white tabular-nums">
@@ -320,10 +365,11 @@ const ChannelsSection = () => (
 /* --------------------------------------------------------------------- */
 
 const AskSection = () => (
-  <section className="mb-[64px]">
-    <h2 className="mb-6 font-medium text-[22px] text-zinc-50 tracking-tight">
-      Ask anything
-    </h2>
+  <section className="mb-[40px]">
+    <SectionHeading>Ask anything</SectionHeading>
+    <p className="mb-4 text-[13px] text-zinc-500">
+      Plain English. The answer cites every receipt.
+    </p>
     <form action="/analyst" method="get">
       <div className="relative w-full">
         <input

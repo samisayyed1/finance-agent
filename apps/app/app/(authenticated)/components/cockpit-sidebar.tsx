@@ -113,11 +113,20 @@ export const CockpitSidebar = ({ children }: { children: ReactNode }) => {
           })}
         </nav>
 
-        <div className="mt-auto border-white/5 border-t px-2 pt-4">
+        <div className="mt-auto flex flex-col gap-3 border-white/5 border-t px-2 pt-4">
           <OrganizationSwitcher
             afterCreateOrganizationUrl="/"
             afterSelectOrganizationUrl="/"
           />
+          {/* Quiet keyboard hint — the kind of detail Linear ships and
+              amateurs miss. No interaction yet; just signals "this is a
+              real tool, not a toy." */}
+          <div className="flex items-center justify-between text-[10px] text-zinc-600">
+            <span>Ask anything</span>
+            <kbd className="rounded border border-white/[0.06] bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px]">
+              ⌘K
+            </kbd>
+          </div>
         </div>
       </aside>
 
